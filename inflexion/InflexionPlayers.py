@@ -1,37 +1,44 @@
 import numpy as np
 
+from Game import Game
+from flags import PlayerColour
+from inflexion.InflexionGame import InflexionGame
 
-class RandomPlayer():
-    def __init__(self, game):
+
+class Player:
+    def __init__(self, game: Game):
+        if not isinstance(game, Game):
+            raise ValueError("game must be an instance of Game")
         self.game = game
 
-    def play(self, board):
-        a = np.random.randint(self.game.getActionSize())
-        valids = self.game.getValidMoves(board, 1)
+    def play(self, game: Game):
+        raise NotImplementedError
+
+
+class RandomPlayer(Player):
+    def play(self, game: Game):
+        a = np.random.randint(game.action_size)
+        valids = game.getValidMoves(PlayerColour.RED)
         while valids[a] != 1:
-            a = np.random.randint(self.game.getActionSize())
+            a = np.random.randint(game.action_size)
         return a
 
 
-class HumanOthelloPlayer():
-    def __init__(self, game):
-        self.game = game
-
-    def play(self, board):
+class HumanInflexionPlayer(Player):
+    def play(self, game: Game):
         # display(board)
-        valid = self.game.getValidMoves(board, 1)
+        valid = game.getValidMoves(PlayerColour.RED)
         for i in range(len(valid)):
             if valid[i]:
-                print("[", int(i / self.game.n), int(i % self.game.n), end="] ")
+                print("[", int(i / game.n), int(i % game.n), end="] ")
         while True:
             input_move = input()
             input_a = input_move.split(" ")
-            if len(input_a) == 2:
+            if len(input_a) == 3:
                 try:
-                    x, y = [int(i) for i in input_a]
-                    if ((0 <= x) and (x < self.game.n) and (0 <= y) and (y < self.game.n)) or \
-                            ((x == self.game.n) and (y == 0)):
-                        a = self.game.n * x + y if x != -1 else self.game.n ** 2
+                    r, q, i = [int(i) for i in input_a]
+                    if 0 <= r < game.n and 0 <= q < game.n and 0 <= i < 7:
+                        a = game.moveToAction((r, q, i))
                         if valid[a]:
                             break
                 except ValueError:
@@ -41,18 +48,15 @@ class HumanOthelloPlayer():
         return a
 
 
-class GreedyInflexionPlayer():
-    def __init__(self, game):
-        self.game = game
-
-    def play(self, board):
-        valids = self.game.getValidMoves(board, 1)
+class GreedyInflexionPlayer(Player):
+    def play(self, game: Game):
+        valids = game.getValidMoves(PlayerColour.RED)
         candidates = []
-        for a in range(self.game.getActionSize()):
+        for a in range(game.action_size):
             if valids[a] == 0:
                 continue
-            nextBoard, _ = self.game.getNextState(board, 1, a)
-            score = self.game.getScore(nextBoard, 1)
+            nextGame, _ = game.getNextState(PlayerColour.RED, a)
+            score = nextGame.getScore(PlayerColour.RED)
             candidates += [(-score, a)]
         candidates.sort()
         return candidates[0][1]

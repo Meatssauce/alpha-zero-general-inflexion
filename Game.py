@@ -1,4 +1,7 @@
-class Game():
+from flags import PlayerColour
+
+
+class Game:
     """
     This class specifies the base Game class. To define your own game, subclass
     this class and implement the functions below. This works when the game is
@@ -11,45 +14,24 @@ class Game():
     def __init__(self):
         pass
 
-    def getInitBoard(self):
-        """
-        Returns:
-            startBoard: a representation of the board (ideally this is the form
-                        that will be the input to your neural network)
-        """
-        pass
+    @property
+    def board(self):
+        raise NotImplementedError
 
-    def getBoardSize(self):
-        """
-        Returns:
-            (x,y): a tuple of board dimensions
-        """
-        pass
+    @property
+    def board_size(self):
+        raise NotImplementedError
 
-    def getActionSize(self):
-        """
-        Returns:
-            actionSize: number of all possible actions
-        """
-        pass
+    @property
+    def action_size(self):
+        raise NotImplementedError
 
-    def getNextState(self, board, player, action):
+    def getNextState(self, player: PlayerColour, action):
+        raise NotImplementedError
+
+    def getValidMoves(self, player: PlayerColour):
         """
         Input:
-            board: current board
-            player: current player (1 or -1)
-            action: action taken by current player
-
-        Returns:
-            nextBoard: board after applying action
-            nextPlayer: player who plays in the next turn (should be -player)
-        """
-        pass
-
-    def getValidMoves(self, board, player):
-        """
-        Input:
-            board: current board
             player: current player
 
         Returns:
@@ -57,12 +39,31 @@ class Game():
                         moves that are valid from the current board and player,
                         0 for invalid moves
         """
-        pass
+        raise NotImplementedError
 
-    def getGameEnded(self, board, player):
+    def moveToAction(self, move: tuple):
         """
         Input:
-            board: current board
+            move: a move
+
+        Returns:
+            action: an action in the form of an integer
+        """
+        raise NotImplementedError
+
+    def actionToMove(self, action: int):
+        """
+        Input:
+            action: an action in the form of an integer
+
+        Returns:
+            move: a move
+        """
+        raise NotImplementedError
+
+    def getGameEnded(self, player: PlayerColour):
+        """
+        Input:
             player: current player (1 or -1)
 
         Returns:
@@ -70,12 +71,11 @@ class Game():
                small non-zero value for draw.
                
         """
-        pass
+        raise NotImplementedError
 
-    def getCanonicalForm(self, board, player):
+    def getCanonicalForm(self, player: PlayerColour):
         """
         Input:
-            board: current board
             player: current player (1 or -1)
 
         Returns:
@@ -86,12 +86,11 @@ class Game():
                             board as is. When the player is black, we can invert
                             the colors and return the board.
         """
-        pass
+        raise NotImplementedError
 
-    def getSymmetries(self, board, pi):
+    def getSymmetries(self, pi):
         """
         Input:
-            board: current board
             pi: policy vector of size self.getActionSize()
 
         Returns:
@@ -99,9 +98,9 @@ class Game():
                        form of the board and the corresponding pi vector. This
                        is used when training the neural network from examples.
         """
-        pass
+        raise NotImplementedError
 
-    def stringRepresentation(self, board):
+    def stringRepresentation(self):
         """
         Input:
             board: current board
@@ -110,4 +109,10 @@ class Game():
             boardString: a quick conversion of board to a string format.
                          Required by MCTS for hashing.
         """
-        pass
+        raise NotImplementedError
+
+    def getScore(self, player: PlayerColour):
+        raise NotImplementedError
+
+    def display(self):
+        raise NotImplementedError
