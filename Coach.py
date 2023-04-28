@@ -59,7 +59,10 @@ class Coach:
             for board, player in canonicalGame.getSymmetries(pi):
                 trainExamples.append([board, self.curPlayer, player, None])
 
-            action = np.random.choice(len(pi), p=pi)
+            try:
+                action = np.random.choice(len(pi), p=pi)
+            except ValueError:
+                raise
             self.game, self.curPlayer = self.game.getNextState(self.curPlayer, action)
 
             r = self.game.getGameEnded(self.curPlayer)
