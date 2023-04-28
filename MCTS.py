@@ -49,16 +49,11 @@ class MCTS:
             probs[bestA] = 1
             return probs
 
-        counts = counts ** (1. / temp)
+        counts = counts ** (1 / temp)
         counts_sum = np.sum(counts)
-        if counts_sum == 0:
-            log.warning("WARNING: all counts zero")
-            counts_sum = 1
         probs = counts / counts_sum
-        try:
-            probs[max(a for a in range(game.action_size) if (s, a) in self.Nsa)] += 1 - sum(probs)
-        except ValueError:
-            log.warning("WARNING: no valid moves")
+        last_pos_idx = max(a for a in range(game.action_size) if (s, a) in self.Nsa)
+        probs[last_pos_idx] += 1 - sum(probs)
         return probs
 
     def search(self, game: Game):

@@ -1,3 +1,5 @@
+import numpy as np
+
 from flags import PlayerColour
 
 
@@ -88,7 +90,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def getSymmetries(self, pi):
+    def getSymmetries(self, pi: np.ndarray):
         """
         Input:
             pi: policy vector of size self.getActionSize()

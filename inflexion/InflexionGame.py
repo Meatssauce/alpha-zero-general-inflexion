@@ -101,7 +101,7 @@ class InflexionGame(Game):
         assert self.curr_turn == new_game.curr_turn
         return new_game
 
-    def getSymmetries(self, pi):
+    def getSymmetries(self, pi: np.ndarray):
         try:
             pi_board = np.reshape(pi, (self.n, self.n, self.max_actions_per_cell))
         except ValueError:
