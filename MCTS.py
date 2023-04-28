@@ -51,9 +51,6 @@ class MCTS:
 
         counts = [x ** (1. / temp) for x in counts]
         counts_sum = float(sum(counts))
-        if counts_sum == 0:
-            log.warning("WARNING: all counts zero")
-            counts_sum = 1
         probs = [x / counts_sum for x in counts]
         return probs
 
