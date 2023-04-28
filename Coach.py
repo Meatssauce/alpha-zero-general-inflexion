@@ -56,8 +56,8 @@ class Coach:
             temp = int(episodeStep < self.args.tempThreshold)
 
             pi = self.mcts.getActionProb(canonicalGame, temp=temp)
-            for board, player in canonicalGame.getSymmetries(pi):
-                trainExamples.append([board, self.curPlayer, player, None])
+            for board, policy in canonicalGame.getSymmetries(pi):
+                trainExamples.append([board, self.curPlayer, policy, None])
 
             try:
                 action = np.random.choice(len(pi), p=pi)

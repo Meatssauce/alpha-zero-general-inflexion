@@ -6,20 +6,22 @@ from flags import PlayerColour
 
 sys.path.append('..')
 from Game import Game
-from .InflexionLogic import Board
 import numpy as np
 
 
 class InflexionGame(Game):
     def __init__(self, n: int, first_mover: PlayerColour = PlayerColour.RED, board: np.ndarray = None,
                  curr_turn: int = 0):
-        super(Game, self).__init__()
+        super().__init__()
         if not isinstance(n, int):
             raise ValueError("n must be an integer")
+        if not isinstance(first_mover, PlayerColour):
+            raise ValueError("first_mover must be an instance of PlayerColour")
         if board is not None and not isinstance(board, np.ndarray):
             raise ValueError("board must be a numpy array")
         if not isinstance(curr_turn, int):
             raise ValueError("curr_turn must be an integer")
+
         self.n = n
         if board is None:
             self._board = np.zeros((n, n), dtype=np.int8)
@@ -29,7 +31,8 @@ class InflexionGame(Game):
         self.first_mover = first_mover
 
         self.max_turns = 343
-        self.directions = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)]
+        self.directions = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))
+        self.max_actions_per_cell = 6 + 1
 
     @property
     def board(self):
@@ -41,16 +44,13 @@ class InflexionGame(Game):
 
     @property
     def action_size(self):
-        return (6 + 1) * self.n ** 2
+        return self.max_actions_per_cell * self.n ** 2
 
     @classmethod
     def from_game(cls, game: 'InflexionGame'):
         if not isinstance(game, InflexionGame):
             raise ValueError("game must be an instance of InflexionGame")
         return cls(game.n, first_mover=game.first_mover, board=np.copy(game.board), curr_turn=game.curr_turn)
-
-    def invert_board(self):
-        self._board = -self._board
 
     def getNextState(self, player: PlayerColour, action):
         # if player takes action on board, return next (board, player)
@@ -63,7 +63,7 @@ class InflexionGame(Game):
 
     def getValidMoves(self, player: PlayerColour):
         # return a fixed size binary vector
-        valids = np.zeros(self.action_size).reshape((self.n, self.n, 7))
+        valids = np.zeros(self.action_size).reshape((self.n, self.n, self.max_actions_per_cell))
         legal_moves = self.get_legal_moves(player)
         if len(legal_moves) == 0:
             raise ValueError("No legal moves. This should never occur in Inflexion")
@@ -74,16 +74,14 @@ class InflexionGame(Game):
     def moveToAction(self, move: tuple):
         # move is a tuple (r, q, direction)
         r, q, direction = move
-        return r * self.n * (6 + 1) + q * (6 + 1) + direction
+        return r * self.n * self.max_actions_per_cell + q * self.max_actions_per_cell + direction
 
     def actionToMove(self, action: int):
-        # action is an integer
-        num_actions_per_cell = 6 + 1
-        num_actions_per_row = self.n * num_actions_per_cell
-        action_idx_in_row = action % num_actions_per_row
-        q = action_idx_in_row // num_actions_per_cell
-        direction = action_idx_in_row % num_actions_per_cell
-        r = action // num_actions_per_row
+        max_actions_per_row = self.n * self.max_actions_per_cell
+        action_idx_in_row = action % max_actions_per_row
+        q = action_idx_in_row // self.max_actions_per_cell
+        direction = action_idx_in_row % self.max_actions_per_cell
+        r = action // max_actions_per_row
         return r, q, direction
 
     def getGameEnded(self, player: PlayerColour):
@@ -99,15 +97,16 @@ class InflexionGame(Game):
         if player == self.first_mover:
             return self
         new_game = InflexionGame.from_game(self)
-        new_game.invert_board()
+        new_game._board *= -1
         assert self.curr_turn == new_game.curr_turn
         return new_game
 
     def getSymmetries(self, pi):
-        # mirror, rotational
-        if len(pi) != self.action_size:
+        try:
+            pi_board = np.reshape(pi, (self.n, self.n, self.max_actions_per_cell))
+        except ValueError:
             raise ValueError("pi must be of length self.getActionSize")
-        pi_board = np.reshape(pi, (self.n, self.n, 7))
+
         symmetric_boards = []
 
         for nb_rotation, do_flip in product(range(2), [True, False]):
@@ -116,7 +115,7 @@ class InflexionGame(Game):
             if do_flip:
                 new_board = np.flipud(np.fliplr(new_board))
                 new_pi = np.flipud(np.fliplr(new_pi))
-            symmetric_boards += [(new_board, list(new_pi.ravel()))]
+            symmetric_boards.append((new_board, new_pi.ravel().tolist()))
         return symmetric_boards
 
     def stringRepresentation(self):
