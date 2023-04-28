@@ -3,6 +3,7 @@ import logging
 import coloredlogs
 
 from Coach import Coach
+from flags import PlayerColour
 from inflexion.InflexionGame import InflexionGame as Game
 from inflexion.pytorch.NNet import NNetWrapper as nn
 from utils import *

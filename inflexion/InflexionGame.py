@@ -11,7 +11,8 @@ import numpy as np
 
 
 class InflexionGame(Game):
-    def __init__(self, n: int, board: np.ndarray = None, curr_turn: int = 0):
+    def __init__(self, n: int, first_mover: PlayerColour = PlayerColour.RED, board: np.ndarray = None,
+                 curr_turn: int = 0):
         super(Game, self).__init__()
         if not isinstance(n, int):
             raise ValueError("n must be an integer")
@@ -25,6 +26,7 @@ class InflexionGame(Game):
         else:
             self._board = board
         self.curr_turn = curr_turn
+        self.first_mover = first_mover
 
         self.max_turns = 343
         self.directions = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)]
@@ -45,8 +47,7 @@ class InflexionGame(Game):
     def from_game(cls, game: 'InflexionGame'):
         if not isinstance(game, InflexionGame):
             raise ValueError("game must be an instance of InflexionGame")
-        new = cls(game.n, np.copy(game.board), game.curr_turn)
-        return new
+        return cls(game.n, first_mover=game.first_mover, board=np.copy(game.board), curr_turn=game.curr_turn)
 
     def invert_board(self):
         self._board = -self._board
@@ -95,7 +96,8 @@ class InflexionGame(Game):
         return 0
 
     def getCanonicalForm(self, player: PlayerColour):
-        # return state if player == 1, else return -state if player == -1
+        if player == self.first_mover:
+            return self
         new_game = InflexionGame.from_game(self)
         new_game.invert_board()
         assert self.curr_turn == new_game.curr_turn
@@ -217,14 +219,18 @@ class InflexionGame(Game):
                 yield r, q
 
         # move encoding: r, q, spawn=0|spread=1, null=-1|direction=0--6
-        r, q, direction_idx = move
-        if direction_idx == 0:  # SPAWN
+        r, q, direction = move
+        if direction == 0:  # SPAWN
             self.board[r][q] = player.num
-        elif 0 < direction_idx < 7:  # SPREAD
-            for x_i, y_i in spread_range((r, q), self.directions[direction_idx - 1]):
-                self.board[x_i][y_i] = abs(self.board[x_i][y_i]) * player.num + 1
+        elif 0 < direction < 7:  # SPREAD
+            for r_i, q_i in spread_range((r, q), self.directions[direction - 1]):
+                new_power = self.board[r_i][q_i] + 1
+                self.board[r_i][q_i] = player.num * new_power if new_power <= 6 else 0
             self.board[r][q] = 0
         else:
             raise ValueError("Invalid move")
 
         self.curr_turn += 1
+
+    def reset(self):
+        return InflexionGame(self.n, first_mover=self.first_mover)

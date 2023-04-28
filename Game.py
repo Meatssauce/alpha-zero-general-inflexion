@@ -116,3 +116,6 @@ class Game:
 
     def display(self):
         raise NotImplementedError
+
+    def reset(self):
+        raise NotImplementedError
