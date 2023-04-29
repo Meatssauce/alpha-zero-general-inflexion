@@ -18,9 +18,9 @@ human_vs_cpu = True
 g = InflexionGame(7)
 
 # all players
-rp = RandomPlayer(g).play
-gp = GreedyInflexionPlayer(g).play
-hp = HumanInflexionPlayer(g).play
+rp = RandomPlayer()
+gp = GreedyInflexionPlayer()
+hp = HumanInflexionPlayer()
 
 # nnet players
 n1 = NNet(g)

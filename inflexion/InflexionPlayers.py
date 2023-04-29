@@ -6,28 +6,22 @@ from inflexion.InflexionGame import InflexionGame
 
 
 class Player:
-    def __init__(self, game: Game):
-        if not isinstance(game, Game):
-            raise ValueError("game must be an instance of Game")
-        self.game = game
-
-    def play(self, game: Game):
+    def play(self, game):
         raise NotImplementedError
 
 
 class RandomPlayer(Player):
-    def play(self, game: Game):
-        a = np.random.randint(game.action_size)
-        valids = game.getValidMoves(PlayerColour.RED)
-        while valids[a] != 1:
-            a = np.random.randint(game.action_size)
-        return a
+    def play(self, game):
+        valids_mask = game.getValidMovesMask()
+        valid_actions = np.argwhere(valids_mask == 1).ravel()
+        action = np.random.choice(valid_actions)
+        return action
 
 
 class HumanInflexionPlayer(Player):
-    def play(self, game: Game):
+    def play(self, game):
         # display(board)
-        valid = game.getValidMoves(PlayerColour.RED)
+        valid = game.getValidMovesMask()
         for i in range(len(valid)):
             if valid[i]:
                 print("[", int(i / game.n), int(i % game.n), end="] ")
@@ -49,14 +43,22 @@ class HumanInflexionPlayer(Player):
 
 
 class GreedyInflexionPlayer(Player):
-    def play(self, game: Game):
-        valids = game.getValidMoves(PlayerColour.RED)
+    def play(self, game):
+        valids = game.getValidMovesMask()
         candidates = []
         for a in range(game.action_size):
             if valids[a] == 0:
                 continue
-            nextGame, _ = game.getNextState(PlayerColour.RED, a)
+            nextGame, _ = game.getNextState(a)
             score = nextGame.getScore(PlayerColour.RED)
             candidates += [(-score, a)]
         candidates.sort()
         return candidates[0][1]
+
+
+class MCTSPlayer(Player):
+    def __init__(self, mcts):
+        self.mcts = mcts
+
+    def play(self, game):
+        return np.argmax(self.mcts.getActionProb(game, temp=0))

@@ -23,25 +23,23 @@ import unittest
 import Arena
 from MCTS import MCTS
 
-from inflexion.InflexionPlayers import InflexionGame
+from inflexion.InflexionPlayers import InflexionGame, MCTSPlayer
 from inflexion.InflexionPlayers import RandomPlayer
 from inflexion.pytorch.NNet import NNetWrapper as InflexionPytorchNNet
 
 import numpy as np
+
+from inflexion.utils import render_board
 from utils import *
 
 
 class TestAllGames(unittest.TestCase):
     @staticmethod
     def execute_game_test(game, neural_net):
-        rp = RandomPlayer(game).play
-
         args = dotdict({'numMCTSSims': 25, 'cpuct': 1.0})
         mcts = MCTS(neural_net(game), args)
-        n1p = lambda x: np.argmax(mcts.getActionProb(x, temp=0))
-
-        arena = Arena.Arena(n1p, rp, game)
-        print(arena.playGames(2, verbose=False))
+        arena = Arena.Arena(MCTSPlayer(mcts), RandomPlayer(), game, display=render_board)
+        print(arena.playGames(2, verbose=True))
    
     def test_inflexion_pytorch(self):
         self.execute_game_test(InflexionGame(7), InflexionPytorchNNet)

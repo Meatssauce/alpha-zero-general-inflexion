@@ -1,9 +1,10 @@
 import logging
+from itertools import cycle
 
 from tqdm import tqdm
 
 from Game import Game
-from flags import PlayerColour
+from flags import PlayerColour, GameStatus
 
 log = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ class Arena:
     An Arena class where any 2 agents can be pit against each other.
     """
 
-    def __init__(self, player1, player2, game: Game, display=None):
+    def __init__(self, player1, player2, game, display=None):
         """
         Input:
             player 1,2: two functions that takes board as input, return action
@@ -30,7 +31,7 @@ class Arena:
         self.game = game
         self.display = display
 
-    def playGame(self, verbose=False):
+    def playGame(self, player1, player2, verbose=False):
         """
         Executes one episode of a game.
 
@@ -40,30 +41,33 @@ class Arena:
             or
                 draw result returned from the game that is neither 1, -1, nor 0.
         """
-        players = [self.player2, None, self.player1]
-        curPlayer = PlayerColour.RED
+        player = cycle([player1, player2])
         it = 0
-        while self.game.getGameEnded(curPlayer) == 0:
+        while self.game.game_status == GameStatus.ONGOING:
             it += 1
-            if verbose:
-                assert self.display
-                print("Turn ", str(it), "Player ", str(curPlayer))
-                self.display(self.game.board)
 
-            canonicalGame = self.game.getCanonicalForm(curPlayer)
-            action = players[curPlayer.num + 1](canonicalGame)
-            valids = canonicalGame.getValidMoves(PlayerColour.RED)
-
+            action = next(player).play(self.game)
+            valids = self.game.getValidMovesMask()
             if valids[action] == 0:
                 log.error(f'Action {action} is not valid!')
                 log.debug(f'valids = {valids}')
                 assert valids[action] > 0
-            self.game, curPlayer = self.game.getNextState(curPlayer, action)
+
+            self.game, curPlayer = self.game.getNextState(action)
+
+            if verbose:
+                assert self.display
+                print("Turn ", str(it), "Player ", str(self.game.player.name))
+                print("Action ", self.game.actionRepr(action))
+                self.display(self.game.board)
+
+            self.game.player = curPlayer
+
         if verbose:
             assert self.display
-            print("Game over: Turn ", str(it), "Result ", str(self.game.getGameEnded(PlayerColour.RED)))
+            print("Game over: Turn ", str(it), "Result ", str(self.game.game_status.name))
             self.display(self.game.board)
-        return curPlayer.num * self.game.getGameEnded(curPlayer)
+        return self.game
 
     def playGames(self, num, verbose=False):
         """
@@ -77,27 +81,21 @@ class Arena:
         """
 
         num = int(num / 2)
-        oneWon = 0
-        twoWon = 0
+        wins = {self.player1: 0, self.player2: 0}
         draws = 0
-        for _ in tqdm(range(num), desc="Arena.playGames (1)"):
-            gameResult = self.playGame(verbose=verbose)
-            if gameResult == 1:
-                oneWon += 1
-            elif gameResult == -1:
-                twoWon += 1
-            else:
-                draws += 1
 
-        self.player1, self.player2 = self.player2, self.player1
+        for i, (player1, player2) in enumerate([(self.player1, self.player2), (self.player2, self.player1)]):
+            for _ in tqdm(range(num), desc=f"Arena.playGames ({i})"):
+                endGame = self.playGame(player1=player1, player2=player2, verbose=verbose)
+                endGame.player = endGame.first_mover
+                match endGame.game_status:
+                    case GameStatus.DRAW:
+                        draws += 1
+                    case GameStatus.WON:
+                        wins[player1] += 1
+                    case GameStatus.LOST:
+                        wins[player2] += 1
+                    case _:
+                        raise ValueError(f'Unexpected game status: {endGame.game_status}')
 
-        for _ in tqdm(range(num), desc="Arena.playGames (2)"):
-            gameResult = self.playGame(verbose=verbose)
-            if gameResult == -1:
-                oneWon += 1
-            elif gameResult == 1:
-                twoWon += 1
-            else:
-                draws += 1
-
-        return oneWon, twoWon, draws
+        return wins[self.player1], wins[self.player2], draws

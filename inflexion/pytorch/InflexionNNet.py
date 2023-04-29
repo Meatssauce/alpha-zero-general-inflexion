@@ -13,7 +13,7 @@ import torch.optim as optim
 class InflexionNNet(nn.Module):
     def __init__(self, game, args):
         # game params
-        self.board_x, self.board_y = game.board_size
+        self.board_x, self.board_y = game.board_shape
         self.action_size = game.action_size
         self.args = args
 

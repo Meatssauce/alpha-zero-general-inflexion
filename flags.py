@@ -23,3 +23,23 @@ class PlayerColour(Enum):
 
     def owns(self, piece: int):
         return piece * self.num > 0
+
+
+class GameStatus(Enum):
+    DRAW = 0
+    WON = 1
+    LOST = -1
+    ONGOING = 2
+
+    def opposite(self):
+        if self == self.WON:
+            return self.LOST
+        elif self == self.LOST:
+            return self.WON
+        else:
+            return self
+
+    def score(self):
+        if self == self.ONGOING:
+            return 0
+        return self.value

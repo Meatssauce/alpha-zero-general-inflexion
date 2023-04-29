@@ -13,25 +13,17 @@ class Game:
 
     See othello/OthelloGame.py for an example implementation.
     """
-    def __init__(self):
-        pass
+    def __init__(self, n: int):
+        self.n = n
+        self.board_shape = n, n
 
-    @property
-    def board(self):
+    def reset(self):
         raise NotImplementedError
 
-    @property
-    def board_size(self):
+    def getNextState(self, action):
         raise NotImplementedError
 
-    @property
-    def action_size(self):
-        raise NotImplementedError
-
-    def getNextState(self, player: PlayerColour, action):
-        raise NotImplementedError
-
-    def getValidMoves(self, player: PlayerColour):
+    def getValidMovesMask(self):
         """
         Input:
             player: current player
@@ -63,34 +55,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def getGameEnded(self, player: PlayerColour):
-        """
-        Input:
-            player: current player (1 or -1)
-
-        Returns:
-            r: 0 if game has not ended. 1 if player won, -1 if player lost,
-               small non-zero value for draw.
-               
-        """
-        raise NotImplementedError
-
-    def getCanonicalForm(self, player: PlayerColour):
-        """
-        Input:
-            player: current player (1 or -1)
-
-        Returns:
-            canonicalBoard: returns canonical form of board. The canonical form
-                            should be independent of player. For e.g. in chess,
-                            the canonical form can be chosen to be from the pov
-                            of white. When the player is white, we can return
-                            board as is. When the player is black, we can invert
-                            the colors and return the board.
-        """
-        raise NotImplementedError
-
-    def getSymmetries(self, pi: np.ndarray):
+    def getSymmetries(self, pi: list):
         """
         Input:
             pi: policy vector of size self.getActionSize()
@@ -119,5 +84,5 @@ class Game:
     def display(self):
         raise NotImplementedError
 
-    def reset(self):
+    def actionRepr(self, action: int):
         raise NotImplementedError

@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from collections import deque
+from itertools import count
 from pickle import Pickler, Unpickler
 from random import shuffle
 
@@ -10,7 +11,8 @@ from tqdm import tqdm
 
 from Arena import Arena
 from MCTS import MCTS
-from flags import PlayerColour
+from flags import PlayerColour, GameStatus
+from inflexion.InflexionPlayers import MCTSPlayer
 
 log = logging.getLogger(__name__)
 
@@ -47,28 +49,21 @@ class Coach:
                            the player eventually won the game, else -1.
         """
         trainExamples = []
-        self.curPlayer = PlayerColour.RED
-        episodeStep = 0
 
-        while True:
-            episodeStep += 1
-            canonicalGame = self.game.getCanonicalForm(self.curPlayer)
+        for episodeStep in count(start=1):
             temp = int(episodeStep < self.args.tempThreshold)
 
-            pi = self.mcts.getActionProb(canonicalGame, temp=temp)
-            for board, policy in canonicalGame.getSymmetries(pi):
-                trainExamples.append([board, self.curPlayer, policy, None])
+            pi = self.mcts.getActionProb(self.game, temp=temp)
+            trainExamples += self.game.getSymmetries(pi)
 
-            try:
-                action = np.random.choice(len(pi), p=pi)
-            except ValueError:
-                raise
-            self.game, self.curPlayer = self.game.getNextState(self.curPlayer, action)
+            action = np.random.choice(len(pi), p=pi)
+            self.game, curPlayer = self.game.getNextState(action)
+            result = self.game.game_status.score()
 
-            r = self.game.getGameEnded(self.curPlayer)
+            self.game.player = curPlayer
 
-            if r != 0:
-                return [(x[0], x[2], r * ((-1) ** (x[1] != self.curPlayer.num))) for x in trainExamples]
+            if self.game.game_status != GameStatus.ONGOING:
+                return [(x[0], x[1], result) for x in trainExamples]
 
     def learn(self):
         """
@@ -117,8 +112,7 @@ class Coach:
             nmcts = MCTS(self.nnet, self.args)
 
             log.info('PITTING AGAINST PREVIOUS VERSION')
-            arena = Arena(lambda x: np.argmax(pmcts.getActionProb(x, temp=0)),
-                          lambda x: np.argmax(nmcts.getActionProb(x, temp=0)), self.game)
+            arena = Arena(MCTSPlayer(pmcts), MCTSPlayer(nmcts), self.game)
             pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
 
             log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))

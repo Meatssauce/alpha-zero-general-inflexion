@@ -4,7 +4,7 @@ import math
 import numpy as np
 
 from Game import Game
-from flags import PlayerColour
+from flags import PlayerColour, GameStatus
 
 EPS = 1e-8
 
@@ -27,7 +27,7 @@ class MCTS:
         self.Es = {}  # stores game.getGameEnded ended for board s
         self.Vs = {}  # stores game.getValidMoves for board s
 
-    def getActionProb(self, game: Game, temp=1):
+    def getActionProb(self, game, temp=1):
         """
         This function performs numMCTSSims simulations of MCTS starting from
         canonicalBoard.
@@ -43,7 +43,7 @@ class MCTS:
         counts = np.array([self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(game.action_size)])
 
         if temp == 0:
-            bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
+            bestAs = np.array(np.argwhere(counts == np.max(counts))).ravel()
             bestA = np.random.choice(bestAs)
             probs = [0] * len(counts)
             probs[bestA] = 1
@@ -56,7 +56,7 @@ class MCTS:
         probs[last_pos_idx] += 1 - sum(probs)
         return probs
 
-    def search(self, game: Game):
+    def search(self, game):
         """
         This function performs one iteration of MCTS. It is recursively called
         till a leaf node is found. The action chosen at each node is one that
@@ -79,15 +79,15 @@ class MCTS:
         s = game.stringRepresentation()
 
         if s not in self.Es:
-            self.Es[s] = game.getGameEnded(PlayerColour.RED)
-        if self.Es[s] != 0:
+            self.Es[s] = game.game_status
+        if self.Es[s] != GameStatus.ONGOING:
             # terminal node
-            return -self.Es[s]
+            return -self.Es[s].score()
 
         if s not in self.Ps:
             # leaf node
-            self.Ps[s], v = self.nnet.predict(game.board)
-            valids = game.getValidMoves(PlayerColour.RED)
+            self.Ps[s], v = self.nnet.predict(game.canonical_board)
+            valids = game.getValidMovesMask()
             self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
@@ -123,8 +123,8 @@ class MCTS:
                     best_act = a
 
         a = best_act
-        next_s, next_player = game.getNextState(PlayerColour.RED, a)
-        next_s = next_s.getCanonicalForm(next_player)
+        next_s, next_player = game.getNextState(a)
+        next_s.player = next_player
 
         v = self.search(next_s)
 
