@@ -119,8 +119,8 @@ class InflexionGame(Game):
             symmetric_boards.append((new_board, new_pi.ravel().tolist()))
         return symmetric_boards
 
-    def stringRepresentation(self):
-        return self.board.tobytes()
+    def playerCentricBoardBytes(self):
+        return self.canonical_board.tobytes()
 
     def getScore(self, player: PlayerColour):
         return self.count_quantity_diff(player)

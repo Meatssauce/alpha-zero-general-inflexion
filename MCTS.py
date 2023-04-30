@@ -39,7 +39,7 @@ class MCTS:
         for i in range(self.args.numMCTSSims):
             self.search(game)
 
-        s = game.stringRepresentation()
+        s = game.playerCentricBoardBytes()
         counts = np.array([self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(game.action_size)])
 
         if temp == 0:
@@ -76,7 +76,7 @@ class MCTS:
             v: the negative of the value of the current canonicalBoard
         """
 
-        s = game.stringRepresentation()
+        s = game.playerCentricBoardBytes()
 
         if s not in self.Es:
             self.Es[s] = game.game_status

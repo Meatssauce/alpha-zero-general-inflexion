@@ -67,7 +67,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def stringRepresentation(self):
+    def playerCentricBoardBytes(self):
         """
         Input:
             board: current board
