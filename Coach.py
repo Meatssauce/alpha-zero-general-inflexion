@@ -57,13 +57,15 @@ class Coach:
             trainExamples += self.game.getSymmetries(pi)
 
             action = np.random.choice(len(pi), p=pi)
+            # prev = self.game.board.copy()
+            # repr = self.game.actionToMove(action)
             self.game, curPlayer = self.game.getNextState(action)
             result = self.game.game_status.score()
 
-            self.game.player = curPlayer
-
             if self.game.game_status != GameStatus.ONGOING:
-                return [(x[0], x[1], result) for x in trainExamples]
+                return [(board, pi, result) for board, pi, in trainExamples]
+
+            self.game.player = curPlayer
 
     def learn(self):
         """

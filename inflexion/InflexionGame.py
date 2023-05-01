@@ -31,7 +31,7 @@ class InflexionGame(Game):
         super().__init__(n)
         self.max_actions_per_cell = 6 + 1
         self.directions = np.array([(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)])
-        self.directions.flags.writable = False
+        self.directions.flags.writeable = False
 
         self.first_mover = first_mover
         self._player = first_mover if curr_player is None else curr_player
@@ -189,7 +189,9 @@ class InflexionGame(Game):
         if move_type == InflexionGame.Move.SPAWN:  # SPAWN
             self.board[r, q] = self.player.num
         elif move_type in InflexionGame.Move.all_spreads():  # SPREAD
-            index = (np.array((r, q)) + self.directions) % self.n
+            power = np.abs(self.board[r, q])
+            index = (np.array((r, q)) + self.directions[:power]) % self.n
+            index = tuple(index.T)
             self.board[index] = np.abs(self.board[index]) + 1
             self.board[index] = np.where(self.board[index] > 6, 0, self.board[index]) * self.player.num
             self.board[r, q] = 0
