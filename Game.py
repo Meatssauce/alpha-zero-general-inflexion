@@ -1,95 +1,99 @@
-class Game():
+from flags import PlayerColour, GameStatus
+
+
+class Game:
     """
     This class specifies the base Game class. To define your own game, subclass
     this class and implement the functions below. This works when the game is
     two-player, adversarial and turn-based.
-
-    Use 1 for player1 and -1 for player2.
-
-    See othello/OthelloGame.py for an example implementation.
     """
-    def __init__(self):
-        pass
+    def __init__(self, firstMover: PlayerColour):
+        assert isinstance(firstMover, PlayerColour)
+        self.firstMover = firstMover
+        self._player = firstMover
+        self.gameStatus = GameStatus.ONGOING
 
-    def getInitBoard(self):
+    @property
+    def canonicalBoard(self):
         """
         Returns:
-            startBoard: a representation of the board (ideally this is the form
-                        that will be the input to your neural network)
+            canonicalBoard: a copy of the board in the canonical form of the current player used as nn input
         """
-        pass
+        raise NotImplementedError
+
+    @property
+    def player(self):
+        return self._player
+
+    @player.setter
+    def player(self, player: PlayerColour):
+        """Set the current player.
+
+        Setting the opponent as current player automatically changes the game status.
+
+        Args:
+            player: the player to set as current player
+        """
+        if player == self._player:
+            return
+        assert isinstance(player, PlayerColour)
+        self._player = player
+        self.gameStatus = self.gameStatus.opposite()
+
+    def reset(self):
+        """
+        Returns:
+            newGame: a game instance with the same initial parameters in its initial state
+        """
+        raise NotImplementedError
 
     def getBoardSize(self):
         """
         Returns:
-            (x,y): a tuple of board dimensions
+            boardSize: a tuple of integers (m, n) specifying the board dimensions
         """
-        pass
+        raise NotImplementedError
 
     def getActionSize(self):
         """
         Returns:
-            actionSize: number of all possible actions
+            actionSize: integer number of all possible actions
         """
-        pass
+        raise NotImplementedError
 
-    def getNextState(self, board, player, action):
-        """
+    def getNextState(self, action: int):
+        """Take an action, applies it to the current board and returns the next board and player.
+
         Input:
-            board: current board
-            player: current player (1 or -1)
             action: action taken by current player
 
         Returns:
             nextBoard: board after applying action
             nextPlayer: player who plays in the next turn (should be -player)
         """
-        pass
+        raise NotImplementedError
 
-    def getValidMoves(self, board, player):
+    def getValidMoves(self):
         """
-        Input:
-            board: current board
-            player: current player
-
         Returns:
             validMoves: a binary vector of length self.getActionSize(), 1 for
                         moves that are valid from the current board and player,
                         0 for invalid moves
         """
-        pass
+        raise NotImplementedError
 
-    def getGameEnded(self, board, player):
-        """
-        Input:
-            board: current board
-            player: current player (1 or -1)
+    def getGameEnded(self):
+        """Returns the won/lost/draw/ongoing status of the current game with respect to the current player.
 
         Returns:
-            r: 0 if game has not ended. 1 if player won, -1 if player lost,
-               small non-zero value for draw.
-               
+            gameStatus: GameStatus.ONGOING if game has not ended. GameStatus.WON if player won,
+                        GameStatus.LOST if player lost, GameStatus.DRAW for draw.
         """
-        pass
-
-    def getCanonicalForm(self, board, player):
-        """
-        Input:
-            board: current board
-            player: current player (1 or -1)
-
-        Returns:
-            canonicalBoard: returns canonical form of board. The canonical form
-                            should be independent of player. For e.g. in chess,
-                            the canonical form can be chosen to be from the pov
-                            of white. When the player is white, we can return
-                            board as is. When the player is black, we can invert
-                            the colors and return the board.
-        """
-        pass
+        raise NotImplementedError
 
     def getSymmetries(self, board, pi):
-        """
+        """Get all symmetric forms of the board and pi vector.
+
         Input:
             board: current board
             pi: policy vector of size self.getActionSize()
@@ -99,7 +103,7 @@ class Game():
                        form of the board and the corresponding pi vector. This
                        is used when training the neural network from examples.
         """
-        pass
+        raise NotImplementedError
 
     def stringRepresentation(self, board):
         """
@@ -110,4 +114,33 @@ class Game():
             boardString: a quick conversion of board to a string format.
                          Required by MCTS for hashing.
         """
-        pass
+        raise NotImplementedError
+
+    def getScore(self):
+        """
+        Returns:
+            score: an integer representing the score of the current player
+        """
+        raise NotImplementedError
+
+    def moveToAction(self, move: tuple):
+        """Converts a move tuple to an action integer.
+
+        Input:
+            move: a tuple of integers (row, col, ...) representing the move
+
+        Returns:
+            action: an integer representing the action
+        """
+        raise NotImplementedError
+
+    def actionToMove(self, action: int):
+        """Converts an action integer to a move tuple.
+
+        Input:
+            action: an integer representing the action
+
+        Returns:
+            move: a tuple of integers (row, col, ...) representing the move
+        """
+        raise NotImplementedError
