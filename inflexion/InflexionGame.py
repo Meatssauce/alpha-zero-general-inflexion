@@ -30,7 +30,8 @@ class InflexionGame(Game):
                  board: np.ndarray = None, curr_turn: int = 0, max_turns: int = 100, max_power: int = 6):
         super().__init__(n)
         self.max_actions_per_cell = 6 + 1
-        self.directions = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))
+        self.directions = np.array([(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)])
+        self.directions.flags.writable = False
 
         self.first_mover = first_mover
         self._player = first_mover if curr_player is None else curr_player
@@ -103,6 +104,7 @@ class InflexionGame(Game):
         return r, q, move_type
 
     def getSymmetries(self, pi: list):
+        """Get symmetries of the canonical board and pi"""
         try:
             pi_board = np.reshape(pi, (self.n, self.n, self.max_actions_per_cell))
         except ValueError:
@@ -111,7 +113,7 @@ class InflexionGame(Game):
         symmetric_boards = []
 
         for nb_rotation, do_flip in product(range(2), [True, False]):
-            new_board = np.rot90(self.board, 2 * nb_rotation)
+            new_board = np.rot90(self.canonical_board, 2 * nb_rotation)
             new_pi = np.rot90(pi_board, 2 * nb_rotation)
             if do_flip:
                 new_board = np.flipud(np.fliplr(new_board))
@@ -157,9 +159,9 @@ class InflexionGame(Game):
             r, q = cell
         except ValueError:
             raise ValueError("cell must be a tuple of length 2")
-        if self.board[r][q] == 0:
+        if self.board[r, q] == 0:
             return [(r, q, InflexionGame.Move.SPAWN.value)]  # r, q, spawn=0|spread1--6
-        if player.owns(self.board[r][q]):
+        if player.owns(self.board[r, q]):
             return [(r, q, InflexionGame.Move(i).value) for i in range(len(self.directions))]
         return []
 
@@ -170,7 +172,7 @@ class InflexionGame(Game):
                 dr, dq = direction
             except ValueError:
                 raise ValueError("origin and direction must be tuples of length 2")
-            for _ in range(abs(self.board[r][q])):
+            for _ in range(abs(self.board[r, q])):
                 r += dr
                 r = r % self.n
                 q += dq
@@ -185,12 +187,12 @@ class InflexionGame(Game):
         move_type = InflexionGame.Move(move_type)
 
         if move_type == InflexionGame.Move.SPAWN:  # SPAWN
-            self.board[r][q] = self.player.num
+            self.board[r, q] = self.player.num
         elif move_type in InflexionGame.Move.all_spreads():  # SPREAD
-            for r_i, q_i in spread_range((r, q), self.directions[move_type.value]):
-                new_power = abs(self.board[r_i][q_i]) + 1
-                self.board[r_i][q_i] = self.player.num * new_power if new_power <= self.max_power else 0
-            self.board[r][q] = 0
+            index = (np.array((r, q)) + self.directions) % self.n
+            self.board[index] = np.abs(self.board[index]) + 1
+            self.board[index] = np.where(self.board[index] > 6, 0, self.board[index]) * self.player.num
+            self.board[r, q] = 0
         else:
             raise ValueError("Invalid move")
 
