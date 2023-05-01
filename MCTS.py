@@ -27,7 +27,7 @@ class MCTS:
         self.Es = {}  # stores game.getGameEnded ended for board s
         self.Vs = {}  # stores game.getValidMoves for board s
 
-    def getActionProb(self, game, temp=1):
+    def getActionProb(self, game, temp=1) -> np.ndarray:
         """
         This function performs numMCTSSims simulations of MCTS starting from
         canonicalBoard.
@@ -43,16 +43,15 @@ class MCTS:
         counts = np.array([self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(game.action_size)])
 
         if temp == 0:
-            bestAs = np.array(np.argwhere(counts == np.max(counts))).ravel()
+            bestAs = np.argwhere(counts == np.max(counts)).ravel()
             bestA = np.random.choice(bestAs)
-            probs = [0] * len(counts)
+            probs = np.zeros(len(counts))
             probs[bestA] = 1
             return probs
 
         counts = counts ** (1 / temp)
-        counts_sum = np.sum(counts)
-        probs = counts / counts_sum
-        last_pos_idx = max(a for a in range(game.action_size) if (s, a) in self.Nsa)
+        probs = counts / np.sum(counts)
+        last_pos_idx = np.argwhere(probs > 0)[-1]
         probs[last_pos_idx] += 1 - sum(probs)
         return probs
 

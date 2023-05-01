@@ -31,7 +31,7 @@ class InflexionGame(Game):
         super().__init__(n)
         self.max_actions_per_cell = 6 + 1
         self.directions = np.array([(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)])
-        self.directions.flags.writable = False
+        self.directions.flags.writeable = False
 
         self.first_mover = first_mover
         self._player = first_mover if curr_player is None else curr_player
@@ -45,6 +45,7 @@ class InflexionGame(Game):
 
         self.game_status = GameStatus.ONGOING
         self.action_size = self.max_actions_per_cell * self.n ** 2
+        self.policy_shape = (self.n, self.n, self.max_actions_per_cell)
 
     @property
     def canonical_board(self):
@@ -83,7 +84,7 @@ class InflexionGame(Game):
         return new_game, self.player.opposite()
 
     def getValidMovesMask(self):
-        valids = np.zeros((self.n, self.n, self.max_actions_per_cell))
+        valids = np.zeros(self.policy_shape)
         legal_moves = np.array(self.get_legal_moves(self.player))
         valids[tuple(legal_moves.T)] = 1
         return valids.ravel()
@@ -103,22 +104,14 @@ class InflexionGame(Game):
         r = action // max_actions_per_row
         return r, q, move_type
 
-    def getSymmetries(self, pi: list):
-        """Get symmetries of the canonical board and pi"""
-        try:
-            pi_board = np.reshape(pi, (self.n, self.n, self.max_actions_per_cell))
-        except ValueError:
-            raise ValueError("pi must be of length self.getActionSize")
-
+    def getSymmetries(self, board_like: np.ndarray):
+        """Get symmetries of the given board and policy probability vector"""
         symmetric_boards = []
-
         for nb_rotation, do_flip in product(range(2), [True, False]):
-            new_board = np.rot90(self.canonical_board, 2 * nb_rotation)
-            new_pi = np.rot90(pi_board, 2 * nb_rotation)
+            symmetric = np.rot90(board_like, 2 * nb_rotation)
             if do_flip:
-                new_board = np.flipud(np.fliplr(new_board))
-                new_pi = np.flipud(np.fliplr(new_pi))
-            symmetric_boards.append((new_board, new_pi.ravel().tolist()))
+                symmetric = np.flipud(np.fliplr(symmetric))
+            symmetric_boards.append(symmetric)
         return symmetric_boards
 
     def playerCentricBoardBytes(self):
@@ -189,7 +182,9 @@ class InflexionGame(Game):
         if move_type == InflexionGame.Move.SPAWN:  # SPAWN
             self.board[r, q] = self.player.num
         elif move_type in InflexionGame.Move.all_spreads():  # SPREAD
-            index = (np.array((r, q)) + self.directions) % self.n
+            power = np.abs(self.board[r, q])
+            index = (np.array((r, q)) + self.directions[:power]) % self.n
+            index = tuple(index.T)
             self.board[index] = np.abs(self.board[index]) + 1
             self.board[index] = np.where(self.board[index] > 6, 0, self.board[index]) * self.player.num
             self.board[r, q] = 0

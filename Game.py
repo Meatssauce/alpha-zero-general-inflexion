@@ -55,7 +55,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def getSymmetries(self, pi: list):
+    def getSymmetries(self, board_like: np.ndarray):
         """
         Input:
             pi: policy vector of size self.getActionSize()
