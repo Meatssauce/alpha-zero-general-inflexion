@@ -123,11 +123,11 @@ class Game:
         """
         raise NotImplementedError
 
-    def moveToAction(self, move: tuple):
+    def moveToAction(self, move: tuple | list):
         """Converts a move tuple to an action integer.
 
         Input:
-            move: a tuple of integers (row, col, ...) representing the move
+            move: a tuple or list (row, col, ...) representing the move
 
         Returns:
             action: an integer representing the action

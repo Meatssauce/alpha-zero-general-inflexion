@@ -7,7 +7,7 @@ To use a game of your choice, subclass the classes in ```Game.py``` and ```Neura
 
 To start training a model for Othello:
 ```bash
-python -O main.py
+python -OO main.py
 ```
 Choose your framework and game in ```main.py```.
 

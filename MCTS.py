@@ -3,19 +3,22 @@ import math
 
 import numpy as np
 
+from Game import Game
 from flags import GameStatus
+from inflexion.pytorch.NNet import NNetWrapper
 
 EPS = 1e-8
 
 log = logging.getLogger(__name__)
 
 
-class MCTS():
+class MCTS:
     """
     This class handles the MCTS tree.
     """
 
-    def __init__(self, nnet, args):
+    def __init__(self, nnet: NNetWrapper, args):
+        assert isinstance(nnet, NNetWrapper)
         self.nnet = nnet
         self.args = args
         self.Qsa = {}  # stores Q values for s,a (as defined in the paper)
@@ -26,15 +29,18 @@ class MCTS():
         self.Es = {}  # stores game.getGameEnded ended for board s
         self.Vs = {}  # stores game.getValidMoves for board s
 
-    def getActionProb(self, game, temp=1):
+    def getActionProb(self, game, temp=1) -> np.ndarray:
         """
         This function performs numMCTSSims simulations of MCTS starting from
         canonicalBoard.
 
         Returns:
-            probs: a policy vector where the probability of the ith action is
+            probs: a 1d ndarray where the probability of the ith action is
                    proportional to Nsa[(s,a)]**(1./temp)
         """
+        assert isinstance(game, Game)
+        assert isinstance(temp, (int, float)) and temp >= 0
+
         for i in range(self.args.numMCTSSims):
             self.search(game)
 
@@ -44,13 +50,13 @@ class MCTS():
         if temp == 0:
             bestAs = np.argwhere(counts == np.max(counts)).ravel()
             bestA = np.random.choice(bestAs)
-            probs = [0] * len(counts)
+            probs = np.zeros(len(counts), dtype=np.int8)
             probs[bestA] = 1
             return probs
 
         counts = counts ** (1. / temp)
         probs = counts / np.sum(counts)
-        return probs.tolist()
+        return probs
 
     def search(self, game):
         """
@@ -71,6 +77,7 @@ class MCTS():
         Returns:
             v: the negative of the value of the current canonicalBoard
         """
+        assert isinstance(game, Game)
 
         s = game.canonicalBoard.tobytes()
 

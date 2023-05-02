@@ -60,6 +60,7 @@ def render_board(board: np.ndarray | dict[tuple, tuple], ansi=False):
                             ..      ..
                                 ..
     """
+    assert isinstance(board, (np.ndarray, dict))
 
     if isinstance(board, np.ndarray):
         board_dict = {}

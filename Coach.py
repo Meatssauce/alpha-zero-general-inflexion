@@ -9,20 +9,24 @@ import numpy as np
 from tqdm import tqdm
 
 from Arena import Arena
+from Game import Game
 from MCTS import MCTS
-from flags import PlayerColour
+from flags import PlayerColour, GameStatus
 from inflexion.InflexionPlayers import MCTSPlayer
+from inflexion.pytorch.NNet import NNetWrapper
 
 log = logging.getLogger(__name__)
 
 
-class Coach():
+class Coach:
     """
     This class executes the self-play + learning. It uses the functions defined
     in Game and NeuralNet. args are specified in main.py.
     """
 
-    def __init__(self, game, nnet, args):
+    def __init__(self, game: Game, nnet: NNetWrapper, args):
+        assert isinstance(game, Game)
+        assert isinstance(nnet, NNetWrapper)
         self.game = game
         self.nnet = nnet
         self.pnet = self.nnet.__class__(self.game)  # the competitor network
@@ -59,16 +63,17 @@ class Coach():
             pi = self.mcts.getActionProb(self.game, temp=temp)
             sym = self.game.getSymmetries(self.game.canonicalBoard, pi)
             for b, p in sym:
-                trainExamples.append([b, self.game.player, p, None])
+                trainExamples.append([b, p, self.game.player])
 
             action = np.random.choice(len(pi), p=pi)
             self.game, curPlayer = self.game.getNextState(action)
 
             self.game.player = curPlayer
-            r = self.game.getGameEnded().value
+            result = self.game.getGameEnded()
 
-            if r != 0:  # enum instead
-                return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
+            if result != GameStatus.ONGOING:
+                return [(board, policy, result.value if player == curPlayer else -result.value)
+                        for board, policy, player in trainExamples]
 
     def learn(self):
         """
@@ -140,7 +145,6 @@ class Coach():
         filename = os.path.join(folder, self.getCheckpointFile(iteration) + ".examples")
         with open(filename, "wb+") as f:
             Pickler(f).dump(self.trainExamplesHistory)
-        f.closed
 
     def loadTrainExamples(self):
         modelFile = os.path.join(self.args.load_folder_file[0], self.args.load_folder_file[1])
