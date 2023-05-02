@@ -1,9 +1,12 @@
 import logging
+from collections import Counter
 from itertools import cycle
+from multiprocessing import Pool
 
 from tqdm import tqdm
 
 from flags import PlayerColour, GameStatus
+from inflexion.InflexionPlayers import Player
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +33,7 @@ class Arena:
         self.game = game
         self.display = display
 
-    def playGame(self, player1, player2, verbose=False):
+    def playGame(self, player1: Player, player2: Player, verbose=False):
         """
         Executes one episode of a game.
 
@@ -40,35 +43,37 @@ class Arena:
             or
                 draw result returned from the game that is neither 1, -1, nor 0.
         """
+        assert isinstance(player1, Player) and isinstance(player2, Player)
+
         player = cycle([player1, player2])
-        self.game = self.game.reset()
+        game = self.game.reset()
         it = 0
-        while self.game.getGameEnded() == GameStatus.ONGOING:
+        while game.getGameEnded() == GameStatus.ONGOING:
             it += 1
             if verbose:
                 assert self.display
-                print("Turn ", str(it), "Player ", str(self.game.player.name))
-                self.display(self.game)
-            action = next(player).play(self.game)
+                print("Turn ", str(it), "Player ", str(game.player.name))
+                self.display(game)
+            action = next(player).play(game)
 
-            valids = self.game.getValidMoves()
+            valids = game.getValidMoves()
 
             if valids[action] == 0:
                 log.error(f'Action {action} is not valid!')
                 log.debug(f'valids = {valids}')
                 assert valids[action] > 0
-            self.game, curPlayer = self.game.getNextState(action)
-            self.game.player = curPlayer
+            game, curPlayer = game.getNextState(action)
+            game.player = curPlayer
 
         # Results from red's perspective
-        self.game.player = self.game.firstMover
+        game.player = game.firstMover
         if verbose:
             assert self.display
-            print("Game over: Turn ", str(it), "Result ", str(self.game.getGameEnded().name))
-            self.display(self.game)
-        return self.game.getGameEnded()
+            print("Game over: Turn ", str(it), "Result ", str(game.getGameEnded().name))
+            self.display(game)
+        return game.getGameEnded()
 
-    def playGames(self, num, verbose=False):
+    def playGames(self, num: int, verbose=False):
         """
         Plays num games in which player1 starts num//2 games and player2 starts
         num//2 games.
@@ -78,6 +83,7 @@ class Arena:
             twoWon: games won by player2
             draws:  games won by nobody
         """
+        assert isinstance(num, int) and num > 2
 
         wins = {self.player1: 0, self.player2: 0}
         draws = 0

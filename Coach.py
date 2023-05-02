@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from collections import deque
+from multiprocessing import Pool
 from pickle import Pickler, Unpickler
 from random import shuffle
 
@@ -31,11 +32,10 @@ class Coach:
         self.nnet = nnet
         self.pnet = self.nnet.__class__(self.game)  # the competitor network
         self.args = args
-        self.mcts = MCTS(self.nnet, self.args)
         self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
         self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
-    def executeEpisode(self):
+    def executeEpisode(self, mcts: MCTS):
         """
         This function executes one episode of self-play, starting with player 1.
         As the game is played, each turn is added as a training example to
@@ -51,6 +51,8 @@ class Coach:
                            pi is the MCTS informed policy vector, v is +1 if
                            the player eventually won the game, else -1.
         """
+        assert isinstance(mcts, MCTS)
+
         trainExamples = []
         self.game = self.game.reset()
         episodeStep = 0
@@ -60,7 +62,7 @@ class Coach:
             temp = int(episodeStep < self.args.tempThreshold)
 
             # get action probabilities from the perspective of current player
-            pi = self.mcts.getActionProb(self.game, temp=temp)
+            pi = mcts.getActionProb(self.game, temp=temp)
             sym = self.game.getSymmetries(self.game.canonicalBoard, pi)
             for b, p in sym:
                 trainExamples.append([b, p, self.game.player])
@@ -83,6 +85,10 @@ class Coach:
         It then pits the new neural network against the old one and accepts it
         only if it wins >= updateThreshold fraction of games.
         """
+        def mcts_generator(max, nnet, args):
+            """Generator for MCTS instances with the same network and args."""
+            for _ in range(max):
+                yield MCTS(nnet, args)
 
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
@@ -91,9 +97,11 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
-                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                    self.mcts = MCTS(self.nnet, self.args)  # reset search tree
-                    iterationTrainExamples += self.executeEpisode()
+                with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
+                    for trainExamples in p.imap_unordered(self.executeEpisode,
+                                                          mcts_generator(self.args.numEps, self.nnet, self.args)):
+                        pbar.update()
+                        iterationTrainExamples += trainExamples
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
