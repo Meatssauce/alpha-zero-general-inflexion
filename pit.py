@@ -1,9 +1,11 @@
+from multiprocessing import freeze_support
+
 import Arena
+from Game import Game
 from MCTS import MCTS
 from inflexion.InflexionGame import InflexionGame
-from inflexion.InflexionPlayers import *
+from inflexion.InflexionPlayers import RandomPlayer, HumanPlayer, GreedyPlayer, MCTSPlayer
 from inflexion.pytorch.NNet import NNetWrapper as NNet
-
 
 import numpy as np
 from utils import *
@@ -13,33 +15,35 @@ use this script to play any two agents against each other, or play manually with
 any agent.
 """
 
-human_vs_cpu = True
 
-game = InflexionGame(7, maxTurns=343, maxPower=6)
+def getPlayer(kind: str, game: Game):
+    match kind:  # random, greedy, mcts, human
+        case "human":
+            player = HumanPlayer()
+        case "random":
+            player = RandomPlayer()
+        case "greedy":
+            player = GreedyPlayer()
+        case "mcts":
+            nn = NNet(game)
+            nn.load_checkpoint('./dev/models/inflexion/7x343x6/', 'best.pth.tar')
+            args = dotdict({'numMCTSSims': 50, 'cpuct': 1.0})
+            mcts = MCTS(nn, args)
+            player = MCTSPlayer(mcts)
+        case _:
+            raise ValueError(f"Unknown CPU player: {kind}")
+    return player
 
-# all players
-rp = RandomPlayer()
-gp = GreedyPlayer()
-hp = HumanPlayer()
 
-# nnet players
-n1 = NNet(game)
-n1.load_checkpoint('./dev/models/inflexion/7x343x6/', 'best.pth.tar')
-args1 = dotdict({'numMCTSSims': 50, 'cpuct':1.0})
-mcts1 = MCTS(n1, args1)
-n1p = MCTSPlayer(mcts1)
+def main():
+    game = InflexionGame(7, maxTurns=343, maxPower=6)
+    player1 = getPlayer("random", game)
+    player2 = getPlayer("greedy", game)
+    arena = Arena.Arena(player1, player2, game)
 
-if human_vs_cpu:
-    player2 = hp
-else:
-    n2 = NNet(game)
-    n2.load_checkpoint('./dev/models/inflexion/7x343x6/', 'best.pth.tar')
-    args2 = dotdict({'numMCTSSims': 50, 'cpuct': 1.0})
-    mcts2 = MCTS(n2, args2)
-    n2p = MCTSPlayer(mcts2)
+    print(arena.playGames(2, verbose=True))
 
-    player2 = n2p  # Player 2 is neural network if it's cpu vs cpu.
 
-arena = Arena.Arena(n1p, player2, game, display=InflexionGame.display)
-
-print(arena.playGames(2, verbose=True))
+if __name__ == "__main__":
+    # freeze_support()
+    main()

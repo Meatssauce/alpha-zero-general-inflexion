@@ -9,6 +9,9 @@ To start training a model for Othello:
 ```bash
 python -OO main.py
 ```
+```bash
+python main.py
+```
 Choose your framework and game in ```main.py```.
 
 ### Docker Installation

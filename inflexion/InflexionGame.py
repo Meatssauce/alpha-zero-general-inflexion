@@ -75,6 +75,9 @@ class InflexionGame(Game):
         return cls(game.n, firstMover=game.firstMover, currPlayer=game.player, board=game.board.copy(),
                    currTurn=game.currTurn, maxTurns=game.maxTurns, maxPower=game.maxPower)
 
+    def clone(self):
+        return InflexionGame.fromGame(self)
+
     def reset(self):
         return InflexionGame(self.n, firstMover=self.firstMover, maxTurns=self.maxTurns, maxPower=self.maxPower)
 
@@ -87,7 +90,7 @@ class InflexionGame(Game):
     def getNextState(self, action: int):
         assert isinstance(action, int) and 0 <= action < self.actionSize
         move = self.actionToMove(action)
-        nextGame = InflexionGame.fromGame(self)
+        nextGame = self.clone()
         nextGame.executeMove(move)
         assert nextGame.currTurn == self.currTurn + 1
         return nextGame, self.player.opponent
@@ -149,7 +152,7 @@ class InflexionGame(Game):
         r = action // maxActionsPerRow
         return r, q, moveType
 
-    def display(self, ansi=False):
+    def display(self, ansi=True):
         """
         Visualise the Infexion hex board via a multiline ASCII string.
         The layout corresponds to the axial coordinate system as described in the
@@ -277,10 +280,8 @@ class InflexionGame(Game):
     def countQuantityDiff(self, player: PlayerColour):
         """Count the # pieces difference for the given player"""
         assert player in PlayerColour
-        diff = self.board[self.board >= PlayerColour.RED.num].size \
-               - self.board[self.board <= PlayerColour.BLUE.num].size
-        adjusted = player.num * diff
-        return adjusted
+        diff = self.board[player.owns(self.board)].size - self.board[player.opponent.owns(self.board)].size
+        return diff
 
     @staticmethod
     def apply_ansi(str: str, bold=True, color=None):

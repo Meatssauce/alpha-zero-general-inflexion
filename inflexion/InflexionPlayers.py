@@ -17,7 +17,7 @@ class RandomPlayer(Player):
         valids = game.getValidMoves()
         actions = actions[valids == 1]
         action = np.random.choice(actions)
-        return action
+        return int(action)
 
 
 class HumanPlayer(Player):
@@ -50,7 +50,7 @@ class GreedyPlayer(Player):
             if valids[a] == 0:
                 continue
             nextBoard, _ = game.getNextState(a)
-            score = game.getScore()
+            score = nextBoard.getScore()
             candidates.append((score, a))
         candidates.sort(reverse=True)
         return candidates[0][1]

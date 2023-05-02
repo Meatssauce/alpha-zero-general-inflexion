@@ -16,7 +16,7 @@ class Arena:
     An Arena class where any 2 agents can be pit against each other.
     """
 
-    def __init__(self, player1, player2, game, display=None):
+    def __init__(self, player1, player2, game):
         """
         Input:
             player 1,2: two functions that takes board as input, return action
@@ -31,7 +31,6 @@ class Arena:
         self.player1 = player1
         self.player2 = player2
         self.game = game
-        self.display = display
 
     def playGame(self, player1: Player, player2: Player, verbose=False):
         """
@@ -46,14 +45,14 @@ class Arena:
         assert isinstance(player1, Player) and isinstance(player2, Player)
 
         player = cycle([player1, player2])
-        game = self.game.reset()
+        game = self.game.clone()
+        assert game.currTurn == 0
         it = 0
         while game.getGameEnded() == GameStatus.ONGOING:
             it += 1
             if verbose:
-                assert self.display
                 print("Turn ", str(it), "Player ", str(game.player.name))
-                self.display(game)
+                game.display()
             action = next(player).play(game)
 
             valids = game.getValidMoves()
@@ -68,9 +67,8 @@ class Arena:
         # Results from red's perspective
         game.player = game.firstMover
         if verbose:
-            assert self.display
             print("Game over: Turn ", str(it), "Result ", str(game.getGameEnded().name))
-            self.display(game)
+            game.display()
         return game.getGameEnded()
 
     def playGames(self, num: int, verbose=False):
@@ -83,22 +81,40 @@ class Arena:
             twoWon: games won by player2
             draws:  games won by nobody
         """
+        def args_generator(total, player1, player2, verbose):
+            for _ in range(total):
+                yield player1, player2, verbose
+
         assert isinstance(num, int) and num >= 2
 
-        wins = {self.player1: 0, self.player2: 0}
+        totalWins = Counter([self.player1, self.player2])
+        totalDraws = 0
+        total = num // 2
+
+        with Pool() as p:
+            for i, (player1, player2) in enumerate([(self.player1, self.player2), (self.player2, self.player1)]):
+                args = args_generator(total, player1, player2, verbose)
+
+                with tqdm(total=total, desc=f"Arena.playGames ({i})") as pbar:
+                    for wins, draws in p.imap_unordered(self.getGameResults, args):
+                        totalWins += wins
+                        totalDraws += draws
+                        pbar.update()
+
+        return totalWins[self.player1], totalWins[self.player2], totalDraws
+
+    def getGameResults(self, args):
+        player1, player2, verbose = args
+        wins = Counter()
         draws = 0
-
-        for i, (player1, player2) in enumerate([(self.player1, self.player2), (self.player2, self.player1)]):
-            for _ in tqdm(range(num // 2), desc=f"Arena.playGames ({i})"):
-                gameResult = self.playGame(player1=player1, player2=player2, verbose=verbose)
-                match gameResult:
-                    case GameStatus.DRAW:
-                        draws += 1
-                    case GameStatus.WON:
-                        wins[player1] += 1
-                    case GameStatus.LOST:
-                        wins[player2] += 1
-                    case _:
-                        raise ValueError(f'Unexpected game status: {gameResult}')
-
-        return wins[self.player1], wins[self.player2], draws
+        gameResult = self.playGame(player1=player1, player2=player2, verbose=verbose)
+        match gameResult:
+            case GameStatus.DRAW:
+                draws += 1
+            case GameStatus.WON:
+                wins[player1] += 1
+            case GameStatus.LOST:
+                wins[player2] += 1
+            case _:
+                raise ValueError(f'Unexpected game status: {gameResult}')
+        return wins, draws

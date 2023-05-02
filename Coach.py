@@ -36,7 +36,7 @@ class Coach:
         self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
         self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
-    def executeEpisode(self, mcts: MCTS):
+    def executeEpisode(self, i):
         """
         This function executes one episode of self-play, starting with player 1.
         As the game is played, each turn is added as a training example to
@@ -52,10 +52,10 @@ class Coach:
                            pi is the MCTS informed policy vector, v is +1 if
                            the player eventually won the game, else -1.
         """
-        assert isinstance(mcts, MCTS)
 
         trainExamples = []
-        self.game = self.game.reset()
+        game = self.game.clone()
+        mcts = MCTS(self.nnet, self.args)
         episodeStep = 0
 
         while True:
@@ -63,16 +63,16 @@ class Coach:
             temp = int(episodeStep < self.args.tempThreshold)
 
             # get action probabilities from the perspective of current player
-            pi = mcts.getActionProb(self.game, temp=temp)
-            sym = self.game.getSymmetries(self.game.canonicalBoard, pi)
+            pi = mcts.getActionProb(game, temp=temp)
+            sym = game.getSymmetries(game.canonicalBoard, pi)
             for b, p in sym:
-                trainExamples.append([b, p, self.game.player])
+                trainExamples.append([b, p, game.player])
 
             action = int(np.random.choice(len(pi), p=pi))
-            self.game, curPlayer = self.game.getNextState(action)
+            game, curPlayer = game.getNextState(action)
 
-            self.game.player = curPlayer
-            result = self.game.getGameEnded()
+            game.player = curPlayer
+            result = game.getGameEnded()
 
             if result != GameStatus.ONGOING:
                 return [(board, policy, result.value if player == curPlayer else -result.value)
@@ -86,10 +86,6 @@ class Coach:
         It then pits the new neural network against the old one and accepts it
         only if it wins >= updateThreshold fraction of games.
         """
-        def mcts_generator(max, nnet, args):
-            """Generator for MCTS instances with the same network and args."""
-            for _ in range(max):
-                yield MCTS(nnet, args)
 
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
@@ -98,9 +94,12 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
+                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
+                #     mcts = MCTS(self.nnet, self.args)
+                #     iterationTrainExamples += self.executeEpisode(mcts)
+
                 with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
-                    for trainExamples in p.imap_unordered(self.executeEpisode,
-                                                          mcts_generator(self.args.numEps, self.nnet, self.args)):
+                    for trainExamples in p.imap_unordered(self.executeEpisode, range(self.args.numEps)):
                         pbar.update()
                         iterationTrainExamples += trainExamples
 
@@ -109,7 +108,8 @@ class Coach:
 
             if len(self.trainExamplesHistory) > self.args.numItersForTrainExamplesHistory:
                 log.warning(
-                    f"Removing the oldest entry in trainExamples. len(trainExamplesHistory) = {len(self.trainExamplesHistory)}")
+                    f"Removing the oldest entry in trainExamples. len(trainExamplesHistory) = "
+                    f"{len(self.trainExamplesHistory)}")
                 self.trainExamplesHistory.pop(0)
             # backup history to a file
             # NB! the examples were collected using the model from the previous iteration, so (i-1)  
@@ -124,15 +124,13 @@ class Coach:
             # training new network, keeping a copy of the old one
             self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            pmcts = MCTS(self.pnet, self.args)
 
             self.nnet.train(trainExamples)
-            nmcts = MCTS(self.nnet, self.args)
 
             log.info('PITTING AGAINST PREVIOUS VERSION')
-            player1 = MCTSPlayer(pmcts)
-            player2 = MCTSPlayer(nmcts)
-            arena = Arena(player1, player2, self.game, self.game.display)
+            player1 = MCTSPlayer(MCTS(self.pnet, self.args))
+            player2 = MCTSPlayer(MCTS(self.nnet, self.args))
+            arena = Arena(player1, player2, self.game)
             pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
 
             log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))

@@ -55,7 +55,7 @@ class MCTS:
             return probs
 
         counts = counts ** (1. / temp)
-        probs = counts / np.sum(counts)
+        probs = counts / counts.sum()
         return probs
 
     def search(self, game):
@@ -87,21 +87,23 @@ class MCTS:
 
         if s not in self.Ps:
             # leaf node
-            self.Ps[s], v = self.nnet.predict(game.canonicalBoard)
+            policies, v = self.nnet.predict(game.canonicalBoard)
             valids = game.getValidMoves()
-            self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
-            sum_Ps_s = np.sum(self.Ps[s])
+            policies *= valids  # masking invalid moves
+            sum_Ps_s = policies.sum()
+
             if sum_Ps_s > 0:
-                self.Ps[s] /= sum_Ps_s  # renormalize
+                policies /= sum_Ps_s  # renormalize
             else:
                 # if all valid moves were masked make all valid moves equally probable
 
                 # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
                 # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.   
                 log.error("All valid moves were masked, doing a workaround.")
-                self.Ps[s] = self.Ps[s] + valids
-                self.Ps[s] /= np.sum(self.Ps[s])
+                policies += valids
+                policies /= policies.sum()
 
+            self.Ps[s] = policies
             self.Vs[s] = valids
             self.Ns[s] = 0
             return -v
@@ -125,7 +127,7 @@ class MCTS:
 
         a = best_act
         next_s, next_player = game.getNextState(a)
-        game.player = next_player
+        next_s.player = next_player
 
         v = self.search(next_s)
 
