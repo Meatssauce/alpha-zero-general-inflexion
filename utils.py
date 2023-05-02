@@ -20,3 +20,12 @@ class AverageMeter(object):
 class dotdict(dict):
     def __getattr__(self, name):
         return self[name]
+
+    def __getstate__(self):
+        # Convert the dictionary to a list of tuples (key, value) for serialization
+        state = [(k, v) for k, v in self.items()]
+        return state
+
+    def __setstate__(self, state):
+        # Deserialize the list of tuples (key, value) and update the dictionary
+        self.update({k: v for k, v in state})

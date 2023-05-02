@@ -1,11 +1,9 @@
 from __future__ import print_function
 import sys
-from collections import defaultdict
 from enum import Enum
 from itertools import product
 
 from flags import PlayerColour, GameStatus
-from inflexion.utils import render_board
 
 sys.path.append('..')
 from Game import Game
@@ -14,176 +12,217 @@ import numpy as np
 
 class InflexionGame(Game):
     class Move(Enum):
-        SPREAD_1 = 0
-        SPREAD_2 = 1
-        SPREAD_3 = 2
-        SPREAD_4 = 3
-        SPREAD_5 = 4
-        SPREAD_6 = 5
-        SPAWN = 6
+        SPREAD_R1 = 0, (1, 0)
+        SPREAD_R2 = 1, (-1, 0)
+        SPREAD_Q1 = 2, (0, 1)
+        SPREAD_Q2 = 3, (0, -1)
+        SPREAD_P1 = 4, (1, -1)
+        SPREAD_P2 = 5, (-1, 1)
+        SPAWN = 6, (0, 0)
+
+        def __init__(self, num, direction):
+            self.num = num
+            self.direction = direction
 
         @classmethod
-        def all_spreads(cls):
-            return cls.SPREAD_1, cls.SPREAD_2, cls.SPREAD_3, cls.SPREAD_4, cls.SPREAD_5, cls.SPREAD_6
+        def fromNum(cls, num: int):
+            for move in cls:
+                if move.num == num:
+                    return move
+            raise IndexError(f"Move number {num} is not valid.")
 
-    def __init__(self, n: int, first_mover: PlayerColour = PlayerColour.RED, curr_player: PlayerColour = None,
-                 board: np.ndarray = None, curr_turn: int = 0, max_turns: int = 100, max_power: int = 6):
-        super().__init__(n)
-        self.max_actions_per_cell = 6 + 1
-        self.directions = np.array([(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)])
-        self.directions.flags.writeable = False
+        @classmethod
+        def allSpreads(cls):
+            return cls.SPREAD_R1, cls.SPREAD_R2, cls.SPREAD_Q1, cls.SPREAD_Q2, cls.SPREAD_P1, cls.SPREAD_P2
 
-        self.first_mover = first_mover
-        self._player = first_mover if curr_player is None else curr_player
+    def __init__(self, n: int,
+                 firstMover: PlayerColour = PlayerColour.RED,
+                 currPlayer: PlayerColour = None,
+                 board: np.ndarray = None,
+                 currTurn: int = 0,
+                 maxTurns: int = 100,
+                 maxPower: int = 6):
+        super().__init__(firstMover=firstMover)
+        assert isinstance(n, int) and n > 0
+        assert isinstance(currPlayer, PlayerColour) or currPlayer is None
+        assert isinstance(board, np.ndarray) or board is None
+        assert board is None or board.shape == (n, n)
+        assert isinstance(currTurn, int) and isinstance(maxTurns, int) and isinstance(maxPower, int)
+
+        self.n = n
+        if currPlayer is not None:
+            self._player = currPlayer
         if board is None:
             self.board = np.zeros((n, n), dtype=np.int8)
         else:
             self.board = board
-        self.curr_turn = curr_turn
-        self.max_turns = max_turns
-        self.max_power = max_power
+        self.currTurn = currTurn
+        self.maxTurns = maxTurns
+        self.maxPower = maxPower
 
-        self.game_status = GameStatus.ONGOING
-        self.action_size = self.max_actions_per_cell * self.n ** 2
-        self.policy_shape = (self.n, self.n, self.max_actions_per_cell)
+        self.maxActionsPerCell = 6 + 1
+        self.actionSize = self.maxActionsPerCell * self.n ** 2
+        self.policyShape = self.n, self.n, self.maxActionsPerCell
+        # self.movesHistory = []
 
     @property
-    def canonical_board(self):
+    def canonicalBoard(self):
         return self.board * self.player.num
 
-    @property
-    def player(self):
-        return self._player
-
-    @player.setter
-    def player(self, player: PlayerColour):
-        if player == self._player:
-            return
-        self._player = player
-        try:
-            self.game_status = self.game_status.opposite()
-        except AttributeError:
-            raise ValueError("game_status must be of type GameStatus")
-
     @classmethod
-    def from_game(cls, game: 'InflexionGame'):
-        try:
-            return cls(game.n, first_mover=game.first_mover, curr_player=game.player, board=game.board.copy(),
-                       curr_turn=game.curr_turn, max_turns=game.max_turns, max_power=game.max_power)
-        except AttributeError:
-            raise ValueError("game must be an instance of InflexionGame")
+    def fromGame(cls, game: 'InflexionGame'):
+        assert isinstance(game, InflexionGame)
+        return cls(game.n, firstMover=game.firstMover, currPlayer=game.player, board=game.board.copy(),
+                   currTurn=game.currTurn, maxTurns=game.maxTurns, maxPower=game.maxPower)
 
     def reset(self):
-        return InflexionGame(self.n, first_mover=self.first_mover, max_turns=self.max_turns, max_power=self.max_power)
+        return InflexionGame(self.n, firstMover=self.firstMover, maxTurns=self.maxTurns, maxPower=self.maxPower)
 
-    def getNextState(self, action):
+    def getBoardSize(self):
+        return self.n, self.n
+
+    def getActionSize(self):
+        return self.actionSize
+
+    def getNextState(self, action: int):
+        assert isinstance(action, int) and 0 <= action < self.actionSize
         move = self.actionToMove(action)
-        new_game = InflexionGame.from_game(self)
-        new_game.execute_move(move)
-        assert new_game.curr_turn == self.curr_turn + 1
-        return new_game, self.player.opposite()
+        nextGame = InflexionGame.fromGame(self)
+        nextGame.executeMove(move)
+        assert nextGame.currTurn == self.currTurn + 1
+        return nextGame, self.player.opponent
 
-    def getValidMovesMask(self):
-        valids = np.zeros(self.policy_shape)
-        legal_moves = np.array(self.get_legal_moves(self.player))
-        valids[tuple(legal_moves.T)] = 1
+    def getValidMoves(self):
+        valids = np.zeros(self.policyShape)
+        legalMoves = np.array(self.getLegalMoves(self.player))
+        valids[tuple(legalMoves.T)] = 1
         return valids.ravel()
 
-    def moveToAction(self, move: tuple):
-        try:
-            r, q, move_type = move
-        except ValueError:
-            raise ValueError("move must be a tuple of length 3")
-        return r * self.n * self.max_actions_per_cell + q * self.max_actions_per_cell + move_type
+    def getGameEnded(self):
+        return self.gameStatus
 
-    def actionToMove(self, action: int):
-        max_actions_per_row = self.n * self.max_actions_per_cell
-        action_idx_in_row = action % max_actions_per_row
-        q = action_idx_in_row // self.max_actions_per_cell
-        move_type = action_idx_in_row % self.max_actions_per_cell
-        r = action // max_actions_per_row
-        return r, q, move_type
+    def getSymmetries(self, board: np.ndarray, pi: np.ndarray):
+        assert isinstance(board, np.ndarray) and board.shape == (self.n, self.n)
+        assert isinstance(pi, np.ndarray) and pi.size == self.actionSize
 
-    def getSymmetries(self, board_like: np.ndarray):
-        """Get symmetries of the given board and policy probability vector"""
+        pi = np.reshape(pi, self.policyShape)
         symmetric_boards = []
-        for nb_rotation, do_flip in product(range(2), [True, False]):
-            symmetric = np.rot90(board_like, 2 * nb_rotation)
-            if do_flip:
-                symmetric = np.flipud(np.fliplr(symmetric))
-            symmetric_boards.append(symmetric)
+        for nb_rotation in range(2):
+            newBoard = np.rot90(board, 2 * nb_rotation)
+            newPi = np.rot90(pi, 2 * nb_rotation)
+            symmetric_boards.append((newBoard, newPi.ravel().tolist()))
+
+            for i in range(1, self.n):
+                # translation along r axis
+                translatedBoard = np.roll(newBoard, i, axis=0)
+                translatedPi = np.roll(newPi, i, axis=0)
+                symmetric_boards.append((translatedBoard, translatedPi.ravel().tolist()))
+                # translation along q axis
+                translatedBoard = np.roll(newBoard, i, axis=1)
+                translatedPi = np.roll(newPi, i, axis=1)
+                symmetric_boards.append((translatedBoard, translatedPi.ravel().tolist()))
+                # translation along p axis
+                translatedBoard = np.roll(np.roll(newBoard, 1, axis=1), -1, axis=0)
+                translatedPi = np.roll(np.roll(newPi, 1, axis=1), -1, axis=0)
+                symmetric_boards.append((translatedBoard, translatedPi.ravel().tolist()))
+
         return symmetric_boards
 
-    def playerCentricBoardBytes(self):
-        return self.canonical_board.tobytes()
+    def stringRepresentation(self, board):
+        return board.tostring()
 
-    def getScore(self, player: PlayerColour):
-        return self.count_quantity_diff(player)
+    def getScore(self):
+        return self.countQuantityDiff(self.player)
 
-    def count_power_diff(self, player: PlayerColour):
-        """Count the total power difference for the given player"""
-        total = self.board.sum()
-        adjusted = player.num * total
-        return adjusted
+    def moveToAction(self, move: tuple | list):
+        r, q, moveType = move
+        assert 0 <= r < self.n and 0 <= q < self.n and moveType in InflexionGame.Move
+        return r * self.n * self.maxActionsPerCell + q * self.maxActionsPerCell + moveType.num
 
-    def count_quantity_diff(self, player: PlayerColour):
-        """Count the # pieces difference for the given player"""
-        diff = self.board[self.board >= PlayerColour.RED.num].size \
-               - self.board[self.board <= PlayerColour.BLUE.num].size
-        adjusted = player.num * diff
-        return adjusted
+    def actionToMove(self, action: int):
+        assert 0 <= action < self.actionSize
+        maxActionsPerRow = self.n * self.maxActionsPerCell
+        ActionIdxInRow = action % maxActionsPerRow
+        q = ActionIdxInRow // self.maxActionsPerCell
+        moveType = ActionIdxInRow % self.maxActionsPerCell
+        moveType = InflexionGame.Move.fromNum(moveType)
+        r = action // maxActionsPerRow
+        return r, q, moveType
 
-    def get_legal_moves(self, player: PlayerColour):
-        """Return all legal moves for the player"""
-        moves = []
-        for r, q in product(range(self.n), range(self.n)):
-            new_moves = self.get_moves_for_cell((r, q), player)
-            moves += new_moves
-        return moves
+    def display(self, ansi=False):
+        """
+        Visualise the Infexion hex board via a multiline ASCII string.
+        The layout corresponds to the axial coordinate system as described in the
+        game specification document.
 
-    def has_legal_moves(self, player: PlayerColour):
-        for r, q in product(range(self.n), range(self.n)):
-            if self.get_moves_for_cell((r, q), player):
-                return True
-        return False
+        Example:
 
-    def get_moves_for_cell(self, cell: tuple[int, int], player: PlayerColour):
-        try:
-            r, q = cell
-        except ValueError:
-            raise ValueError("cell must be a tuple of length 2")
-        if self.board[r, q] == 0:
-            return [(r, q, InflexionGame.Move.SPAWN.value)]  # r, q, spawn=0|spread1--6
-        if player.owns(self.board[r, q]):
-            return [(r, q, InflexionGame.Move(i).value) for i in range(len(self.directions))]
-        return []
+            # >>> board = {
+            # ...     (5, 6): ("r", 2),
+            # ...     (1, 0): ("b", 2),
+            # ...     (1, 1): ("b", 1),
+            # ...     (3, 2): ("b", 1),
+            # ...     (1, 3): ("b", 3),
+            # ... }
+            # >>> print_board(board, ansi=False)
 
-    def execute_move(self, move):
-        def spread_range(origin: tuple[int, int], direction: tuple[int, int]):
-            try:
-                r, q = origin
-                dr, dq = direction
-            except ValueError:
-                raise ValueError("origin and direction must be tuples of length 2")
-            for _ in range(abs(self.board[r, q])):
-                r += dr
-                r = r % self.n
-                q += dq
-                q = q % self.n
-                yield r, q
+                                    ..
+                                ..      ..
+                            ..      ..      ..
+                        ..      ..      ..      ..
+                    ..      ..      ..      ..      ..
+                b2      ..      b1      ..      ..      ..
+            ..      b1      ..      ..      ..      ..      ..
+                ..      ..      ..      ..      ..      r2
+                    ..      b3      ..      ..      ..
+                        ..      ..      ..      ..
+                            ..      ..      ..
+                                ..      ..
+                                    ..
+        """
+        board = {}
+        for r, q in product(range(self.board.shape[0]), range(self.board.shape[1])):
+            piece = self.board[r, q]
+            if piece == 0:
+                continue
+            player = PlayerColour.from_piece(piece)
+            power = abs(piece)
+            board[(r, q)] = (player.token, power)
 
-        # move encoding: r, q, spawn=0|spread=1--6
-        try:
-            r, q, move_type = move
-        except ValueError:
-            raise ValueError("move must be a tuple of length 3")
-        move_type = InflexionGame.Move(move_type)
+        dim = 7
+        output = ""
+        for row in range(dim * 2 - 1):
+            output += "    " * abs((dim - 1) - row)
+            for col in range(dim - abs(row - (dim - 1))):
+                # Map row, col to r, q
+                r = max((dim - 1) - row, 0) + col
+                q = max(row - (dim - 1), 0) + col
+                if (r, q) in board:
+                    color, power = board[(r, q)]
+                    text = f"{color}{power}".center(4)
+                    if ansi:
+                        output += self.apply_ansi(text, color=color, bold=False)
+                    else:
+                        output += text
+                else:
+                    output += " .. "
+                output += "    "
+            output += "\n"
+        print(output)
 
-        if move_type == InflexionGame.Move.SPAWN:  # SPAWN
+    def executeMove(self, move: tuple):
+        """Execute a move on the board and update the game state."""
+        r, q, moveType = move
+        assert 0 <= r < self.n and 0 <= q < self.n and moveType in InflexionGame.Move
+
+        if moveType == InflexionGame.Move.SPAWN:  # SPAWN
+            assert self.board[r, q] == 0
             self.board[r, q] = self.player.num
-        elif move_type in InflexionGame.Move.all_spreads():  # SPREAD
+        elif moveType in InflexionGame.Move.allSpreads():  # SPREAD
+            assert self.player.owns(self.board[r, q])
             power = np.abs(self.board[r, q])
-            index = (np.array((r, q)) + self.directions[:power]) % self.n
+            deltas = np.arange(1, power + 1).reshape(power, 1) * np.array(moveType.direction)
+            index = (np.array((r, q)) + deltas) % self.n
             index = tuple(index.T)
             self.board[index] = np.abs(self.board[index]) + 1
             self.board[index] = np.where(self.board[index] > 6, 0, self.board[index]) * self.player.num
@@ -191,33 +230,76 @@ class InflexionGame(Game):
         else:
             raise ValueError("Invalid move")
 
-        self.curr_turn += 1
+        self.currTurn += 1
+        # self.movesHistory.append((self.player, move))
 
         # Update game status
-        if move_type in InflexionGame.Move.all_spreads() and \
-                self.board[self.board >= self.player.opposite().num].size == 0:
-            self.game_status = GameStatus.WON
-        elif self.curr_turn >= self.max_turns:
-            diff = self.count_power_diff(self.player)
+        if moveType in InflexionGame.Move.allSpreads() and \
+                self.board[self.player.opponent.owns(self.board)].size == 0:
+            self.gameStatus = GameStatus.WON
+        elif self.currTurn >= self.maxTurns:
+            diff = self.countPowerDiff(self.player)
             if diff >= 2:
-                self.game_status = GameStatus.WON
+                self.gameStatus = GameStatus.WON
             elif diff <= -2:
-                self.game_status = GameStatus.LOST
+                self.gameStatus = GameStatus.LOST
             else:
-                self.game_status = GameStatus.DRAW
+                self.gameStatus = GameStatus.DRAW
         elif (self.board == 0).all():
-            self.game_status = GameStatus.DRAW
+            self.gameStatus = GameStatus.DRAW
 
-    def actionRepr(self, action: int):
-        move = self.actionToMove(action)
-        try:
-            r, q, move_type = move
-        except ValueError:
-            raise ValueError("move must be a tuple of length 3")
-        move_type = InflexionGame.Move(move_type)
-        if move_type == InflexionGame.Move.SPAWN:
-            return f"Spawn at ({r}, {q})"
-        elif move_type in InflexionGame.Move.all_spreads():
-            return f"Spread at ({r}, {q}) in direction {move_type.name}"
-        else:
-            raise ValueError("Invalid move")
+    def countPowerDiff(self, player: PlayerColour):
+        """Count the total power difference for the given player"""
+        assert player in PlayerColour
+        total = self.board.sum()
+        adjusted = player.num * total
+        return adjusted
+
+    def getLegalMoves(self, player: PlayerColour):
+        """Return all legal moves for the player"""
+        assert player in PlayerColour
+        moves = []
+        for r, q in product(range(self.n), range(self.n)):
+            new_moves = self.getMovesForCell((r, q), player)
+            moves += new_moves
+        return moves
+
+    def getMovesForCell(self, cell: tuple[int, int], player: PlayerColour):
+        assert player in PlayerColour
+        assert len(cell) == 2 and all(isinstance(x, int) for x in cell)
+        r, q = cell
+        if self.board[r, q] == 0:
+            return [(r, q, InflexionGame.Move.SPAWN.num)]  # r, q, spawn=0|spread1--6
+        if player.owns(self.board[r, q]):
+            return [(r, q, move.num) for move in InflexionGame.Move.allSpreads()]
+        return []
+
+    def countQuantityDiff(self, player: PlayerColour):
+        """Count the # pieces difference for the given player"""
+        assert player in PlayerColour
+        diff = self.board[self.board >= PlayerColour.RED.num].size \
+               - self.board[self.board <= PlayerColour.BLUE.num].size
+        adjusted = player.num * diff
+        return adjusted
+
+    @staticmethod
+    def apply_ansi(str: str, bold=True, color=None):
+        """
+        Wraps a string with ANSI control codes to enable basic terminal-based
+        formatting on that string. Note: Not all terminals will be compatible!
+
+        Arguments:
+
+        str -- String to apply ANSI control codes to
+        bold -- True if you want the text to be rendered bold
+        color -- Colour of the text. Currently only red/"r" and blue/"b" are
+            supported, but this can easily be extended if desired...
+
+        """
+        bold_code = "\033[1m" if bold else ""
+        color_code = ""
+        if color == "r":
+            color_code = "\033[31m"
+        if color == "b":
+            color_code = "\033[34m"
+        return f"{bold_code}{color_code}{str}\033[0m"

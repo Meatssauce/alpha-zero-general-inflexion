@@ -5,9 +5,10 @@ from itertools import product
 import numpy as np
 
 from flags import PlayerColour
+from inflexion.InflexionGame import InflexionGame
 
 
-def apply_ansi(str, bold=True, color=None):
+def apply_ansi(str: str, bold=True, color=None):
     """
     Wraps a string with ANSI control codes to enable basic terminal-based
     formatting on that string. Note: Not all terminals will be compatible!
@@ -29,7 +30,7 @@ def apply_ansi(str, bold=True, color=None):
     return f"{bold_code}{color_code}{str}\033[0m"
 
 
-def render_board(board: dict[tuple, tuple], ansi=False):
+def render_board(game: InflexionGame, ansi=False):
     """
     Visualise the Infexion hex board via a multiline ASCII string.
     The layout corresponds to the axial coordinate system as described in the
@@ -60,16 +61,16 @@ def render_board(board: dict[tuple, tuple], ansi=False):
                             ..      ..
                                 ..
     """
-    if isinstance(board, np.ndarray):
-        board_dict = {}
-        for r, q in product(range(board.shape[0]), range(board.shape[0])):
-            piece = board[r][q]
-            if piece == 0:
-                continue
-            player = PlayerColour.from_piece(piece)
-            power = abs(piece)
-            board_dict[(r, q)] = (player.token, power)
-        board = board_dict
+    assert isinstance(game, InflexionGame)
+
+    board = {}
+    for r, q in product(range(game.board.shape[0]), range(game.board.shape[1])):
+        piece = game.board[r, q]
+        if piece == 0:
+            continue
+        player = PlayerColour.from_piece(piece)
+        power = abs(piece)
+        board[(r, q)] = (player.token, power)
 
     dim = 7
     output = ""

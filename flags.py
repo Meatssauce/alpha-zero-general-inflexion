@@ -1,5 +1,7 @@
 from enum import Enum
 
+import numpy as np
+
 
 class PlayerColour(Enum):
     RED = 1, 'R'
@@ -16,20 +18,21 @@ class PlayerColour(Enum):
                 return player
         return None
 
-    def opposite(self):
+    @property
+    def opponent(self):
         for player in self.__class__:
             if player != self:
                 return player
 
-    def owns(self, piece: int):
+    def owns(self, piece: int | float | np.ndarray):
         return piece * self.num > 0
 
 
 class GameStatus(Enum):
-    DRAW = 0
+    ONGOING = 0
+    DRAW = 1e-4  # draw has some value
     WON = 1
     LOST = -1
-    ONGOING = 2
 
     def opposite(self):
         if self == self.WON:
@@ -38,8 +41,3 @@ class GameStatus(Enum):
             return self.WON
         else:
             return self
-
-    def score(self):
-        if self == self.ONGOING:
-            return 0
-        return self.value

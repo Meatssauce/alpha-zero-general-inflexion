@@ -1,64 +1,66 @@
 import numpy as np
 
 from Game import Game
-from flags import PlayerColour
+from MCTS import MCTS
 from inflexion.InflexionGame import InflexionGame
 
 
 class Player:
-    def play(self, game):
+    def play(self, game: Game):
         raise NotImplementedError
 
 
 class RandomPlayer(Player):
-    def play(self, game):
-        valids_mask = game.getValidMovesMask()
-        valid_actions = np.argwhere(valids_mask == 1).ravel()
-        action = np.random.choice(valid_actions)
+    def play(self, game: Game):
+        assert isinstance(game, Game)
+        actions = np.arange(game.getActionSize())
+        valids = game.getValidMoves()
+        actions = actions[valids == 1]
+        action = np.random.choice(actions)
         return action
 
 
-class HumanInflexionPlayer(Player):
-    def play(self, game):
+class HumanPlayer(Player):
+    def play(self, game: Game):
+        assert isinstance(game, Game)
         # display(board)
-        valid = game.getValidMovesMask()
-        for i in range(len(valid)):
-            if valid[i]:
-                print("[", int(i / game.n), int(i % game.n), end="] ")
+        valid = game.getValidMoves()
         while True:
-            input_move = input()
-            input_a = input_move.split(" ")
-            if len(input_a) == 3:
-                try:
-                    r, q, i = [int(i) for i in input_a]
-                    if 0 <= r < game.n and 0 <= q < game.n and 0 <= i < 7:
-                        a = game.moveToAction((r, q, i))
-                        if valid[a]:
-                            break
-                except ValueError:
-                    # Input needs to be an integer
-                    'Invalid integer'
-            print('Invalid move')
+            print("Enter move as 3 integer: r q m")
+            print("where m is in ", end="")
+            print(" ".join([f"{move.name}: {move.num}" for move in InflexionGame.Move]))
+            input_move = input(">>>")
+            r, q, m = [int(x) for x in input_move.split(' ')]
+            m = InflexionGame.Move.fromNum(m)
+            try:
+                a = game.moveToAction((r, q, m))
+                if valid[a]:
+                    break
+            except ValueError:
+                raise ValueError('Invalid move')
         return a
 
 
-class GreedyInflexionPlayer(Player):
-    def play(self, game):
-        valids = game.getValidMovesMask()
+class GreedyPlayer(Player):
+    def play(self, game: Game):
+        assert isinstance(game, Game)
+        valids = game.getValidMoves()
         candidates = []
-        for a in range(game.action_size):
+        for a in range(game.getActionSize()):
             if valids[a] == 0:
                 continue
-            nextGame, _ = game.getNextState(a)
-            score = nextGame.getScore(PlayerColour.RED)
-            candidates += [(-score, a)]
-        candidates.sort()
+            nextBoard, _ = game.getNextState(a)
+            score = game.getScore()
+            candidates.append((score, a))
+        candidates.sort(reverse=True)
         return candidates[0][1]
 
 
 class MCTSPlayer(Player):
-    def __init__(self, mcts):
+    def __init__(self, mcts: MCTS):
+        assert isinstance(mcts, MCTS)
         self.mcts = mcts
 
-    def play(self, game):
-        return np.argmax(self.mcts.getActionProb(game, temp=0))
+    def play(self, game: Game):
+        assert isinstance(game, Game)
+        return int(np.argmax(self.mcts.getActionProb(game, temp=0)))

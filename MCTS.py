@@ -4,7 +4,8 @@ import math
 import numpy as np
 
 from Game import Game
-from flags import PlayerColour, GameStatus
+from flags import GameStatus
+from inflexion.pytorch.NNet import NNetWrapper
 
 EPS = 1e-8
 
@@ -16,7 +17,8 @@ class MCTS:
     This class handles the MCTS tree.
     """
 
-    def __init__(self, nnet, args):
+    def __init__(self, nnet: NNetWrapper, args):
+        assert isinstance(nnet, NNetWrapper)
         self.nnet = nnet
         self.args = args
         self.Qsa = {}  # stores Q values for s,a (as defined in the paper)
@@ -33,26 +35,27 @@ class MCTS:
         canonicalBoard.
 
         Returns:
-            probs: a policy vector where the probability of the ith action is
+            probs: a 1d ndarray where the probability of the ith action is
                    proportional to Nsa[(s,a)]**(1./temp)
         """
+        assert isinstance(game, Game)
+        assert isinstance(temp, (int, float)) and temp >= 0
+
         for i in range(self.args.numMCTSSims):
             self.search(game)
 
-        s = game.playerCentricBoardBytes()
-        counts = np.array([self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(game.action_size)])
+        s = game.canonicalBoard.tobytes()
+        counts = np.array([self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(game.getActionSize())])
 
         if temp == 0:
             bestAs = np.argwhere(counts == np.max(counts)).ravel()
             bestA = np.random.choice(bestAs)
-            probs = np.zeros(len(counts))
+            probs = np.zeros(len(counts), dtype=np.int8)
             probs[bestA] = 1
             return probs
 
-        counts = counts ** (1 / temp)
+        counts = counts ** (1. / temp)
         probs = counts / np.sum(counts)
-        last_pos_idx = np.argwhere(probs > 0)[-1]
-        probs[last_pos_idx] += 1 - sum(probs)
         return probs
 
     def search(self, game):
@@ -74,19 +77,18 @@ class MCTS:
         Returns:
             v: the negative of the value of the current canonicalBoard
         """
+        assert isinstance(game, Game)
 
-        s = game.playerCentricBoardBytes()
+        s = game.canonicalBoard.tobytes()
 
-        if s not in self.Es:
-            self.Es[s] = game.game_status
-        if self.Es[s] != GameStatus.ONGOING:
+        if (gameStatus := game.getGameEnded()) != GameStatus.ONGOING:
             # terminal node
-            return -self.Es[s].score()
+            return -gameStatus.value
 
         if s not in self.Ps:
             # leaf node
-            self.Ps[s], v = self.nnet.predict(game.canonical_board)
-            valids = game.getValidMovesMask()
+            self.Ps[s], v = self.nnet.predict(game.canonicalBoard)
+            valids = game.getValidMoves()
             self.Ps[s] = self.Ps[s] * valids  # masking invalid moves
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
@@ -109,7 +111,7 @@ class MCTS:
         best_act = -1
 
         # pick the action with the highest upper confidence bound
-        for a in range(game.action_size):
+        for a in range(game.getActionSize()):
             if valids[a]:
                 if (s, a) in self.Qsa:
                     u = self.Qsa[(s, a)] + self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s]) / (
@@ -123,7 +125,7 @@ class MCTS:
 
         a = best_act
         next_s, next_player = game.getNextState(a)
-        next_s.player = next_player
+        game.player = next_player
 
         v = self.search(next_s)
 
