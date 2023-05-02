@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 from collections import deque
-from multiprocessing import Pool
 from pickle import Pickler, Unpickler
 from random import shuffle
 
@@ -15,7 +14,6 @@ from MCTS import MCTS
 from flags import PlayerColour, GameStatus
 from inflexion.InflexionPlayers import MCTSPlayer
 from inflexion.pytorch.NNet import NNetWrapper
-from inflexion.utils import render_board
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +34,7 @@ class Coach:
         self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
         self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
-    def executeEpisode(self, i):
+    def executeEpisode(self, game, mcts):
         """
         This function executes one episode of self-play, starting with player 1.
         As the game is played, each turn is added as a training example to
@@ -52,10 +50,9 @@ class Coach:
                            pi is the MCTS informed policy vector, v is +1 if
                            the player eventually won the game, else -1.
         """
-
+        # game, mcts = args
+        assert isinstance(game, Game) and isinstance(mcts, MCTS)
         trainExamples = []
-        game = self.game.clone()
-        mcts = MCTS(self.nnet, self.args)
         episodeStep = 0
 
         while True:
@@ -68,7 +65,7 @@ class Coach:
             for b, p in sym:
                 trainExamples.append([b, p, game.player])
 
-            action = int(np.random.choice(len(pi), p=pi))
+            action = np.random.choice(len(pi), p=pi)
             game, curPlayer = game.getNextState(action)
 
             game.player = curPlayer
@@ -94,14 +91,10 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
-                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                #     mcts = MCTS(self.nnet, self.args)
-                #     iterationTrainExamples += self.executeEpisode(mcts)
-
-                with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
-                    for trainExamples in p.imap_unordered(self.executeEpisode, range(self.args.numEps)):
-                        pbar.update()
-                        iterationTrainExamples += trainExamples
+                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
+                    mcts = MCTS(self.nnet, self.args)  # reset search tree
+                    game = self.game.reset()  # reset game
+                    iterationTrainExamples += self.executeEpisode(game, mcts)
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -124,13 +117,15 @@ class Coach:
             # training new network, keeping a copy of the old one
             self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+            pmcts = MCTS(self.pnet, self.args)
 
             self.nnet.train(trainExamples)
+            nmcts = MCTS(self.nnet, self.args)
 
             log.info('PITTING AGAINST PREVIOUS VERSION')
-            player1 = MCTSPlayer(MCTS(self.pnet, self.args))
-            player2 = MCTSPlayer(MCTS(self.nnet, self.args))
-            arena = Arena(player1, player2, self.game)
+            player1 = MCTSPlayer(pmcts)
+            player2 = MCTSPlayer(nmcts)
+            arena = Arena(player1, player2, self.game.reset())
             pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
 
             log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
