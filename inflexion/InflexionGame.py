@@ -35,16 +35,6 @@ class InflexionGame(Game):
         def allSpreads(cls):
             return cls.SPREAD_R1, cls.SPREAD_R2, cls.SPREAD_Q1, cls.SPREAD_Q2, cls.SPREAD_P1, cls.SPREAD_P2
 
-    squareContent = {
-        -1: "X",
-        +0: "-",
-        +1: "O"
-    }
-
-    @staticmethod
-    def getSquarePiece(piece):
-        return InflexionGame.squareContent[piece]
-
     def __init__(self, n: int,
                  firstMover: PlayerColour = PlayerColour.RED,
                  currPlayer: PlayerColour = None,
@@ -141,29 +131,8 @@ class InflexionGame(Game):
     def stringRepresentation(self, board):
         return board.tostring()
 
-    def stringRepresentationReadable(self, board):
-        board_s = "".join(self.squareContent[square] for row in board for square in row)
-        return board_s
-
     def getScore(self):
         return self.countQuantityDiff(self.player)
-
-    @staticmethod
-    def display(board):
-        n = board.shape[0]
-        print("   ", end="")
-        for y in range(n):
-            print(y, end=" ")
-        print("")
-        print("-----------------------")
-        for y in range(n):
-            print(y, "|", end="")  # print the row #
-            for x in range(n):
-                piece = board[y][x]  # get the piece to print
-                print(InflexionGame.squareContent[piece], end=" ")
-            print("|")
-
-        print("-----------------------")
 
     def moveToAction(self, move: tuple | list):
         r, q, moveType = move
@@ -179,6 +148,67 @@ class InflexionGame(Game):
         moveType = InflexionGame.Move.fromNum(moveType)
         r = action // maxActionsPerRow
         return r, q, moveType
+
+    def display(self, ansi=False):
+        """
+        Visualise the Infexion hex board via a multiline ASCII string.
+        The layout corresponds to the axial coordinate system as described in the
+        game specification document.
+
+        Example:
+
+            # >>> board = {
+            # ...     (5, 6): ("r", 2),
+            # ...     (1, 0): ("b", 2),
+            # ...     (1, 1): ("b", 1),
+            # ...     (3, 2): ("b", 1),
+            # ...     (1, 3): ("b", 3),
+            # ... }
+            # >>> print_board(board, ansi=False)
+
+                                    ..
+                                ..      ..
+                            ..      ..      ..
+                        ..      ..      ..      ..
+                    ..      ..      ..      ..      ..
+                b2      ..      b1      ..      ..      ..
+            ..      b1      ..      ..      ..      ..      ..
+                ..      ..      ..      ..      ..      r2
+                    ..      b3      ..      ..      ..
+                        ..      ..      ..      ..
+                            ..      ..      ..
+                                ..      ..
+                                    ..
+        """
+        board = {}
+        for r, q in product(range(self.board.shape[0]), range(self.board.shape[1])):
+            piece = self.board[r, q]
+            if piece == 0:
+                continue
+            player = PlayerColour.from_piece(piece)
+            power = abs(piece)
+            board[(r, q)] = (player.token, power)
+
+        dim = 7
+        output = ""
+        for row in range(dim * 2 - 1):
+            output += "    " * abs((dim - 1) - row)
+            for col in range(dim - abs(row - (dim - 1))):
+                # Map row, col to r, q
+                r = max((dim - 1) - row, 0) + col
+                q = max(row - (dim - 1), 0) + col
+                if (r, q) in board:
+                    color, power = board[(r, q)]
+                    text = f"{color}{power}".center(4)
+                    if ansi:
+                        output += self.apply_ansi(text, color=color, bold=False)
+                    else:
+                        output += text
+                else:
+                    output += " .. "
+                output += "    "
+            output += "\n"
+        print(output)
 
     def executeMove(self, move: tuple):
         """Execute a move on the board and update the game state."""
@@ -251,3 +281,25 @@ class InflexionGame(Game):
                - self.board[self.board <= PlayerColour.BLUE.num].size
         adjusted = player.num * diff
         return adjusted
+
+    @staticmethod
+    def apply_ansi(str: str, bold=True, color=None):
+        """
+        Wraps a string with ANSI control codes to enable basic terminal-based
+        formatting on that string. Note: Not all terminals will be compatible!
+
+        Arguments:
+
+        str -- String to apply ANSI control codes to
+        bold -- True if you want the text to be rendered bold
+        color -- Colour of the text. Currently only red/"r" and blue/"b" are
+            supported, but this can easily be extended if desired...
+
+        """
+        bold_code = "\033[1m" if bold else ""
+        color_code = ""
+        if color == "r":
+            color_code = "\033[31m"
+        if color == "b":
+            color_code = "\033[34m"
+        return f"{bold_code}{color_code}{str}\033[0m"

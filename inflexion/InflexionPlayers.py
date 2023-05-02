@@ -2,6 +2,7 @@ import numpy as np
 
 from Game import Game
 from MCTS import MCTS
+from inflexion.InflexionGame import InflexionGame
 
 
 class Player:
@@ -24,14 +25,15 @@ class HumanPlayer(Player):
         assert isinstance(game, Game)
         # display(board)
         valid = game.getValidMoves()
-        for i in range(len(valid)):
-            r, q, moveType = game.actionToMove(i)
-            print("[", r, q, moveType.num, end="] ")
         while True:
-            input_move = input()
-            input_a = input_move.split(" ")
+            print("Enter move as 3 integer: r q m")
+            print("where m is in ", end="")
+            print(" ".join([f"{move.name}: {move.num}" for move in InflexionGame.Move]))
+            input_move = input(">>>")
+            r, q, m = [int(x) for x in input_move.split(' ')]
+            m = InflexionGame.Move.fromNum(m)
             try:
-                a = game.moveToAction(input_a)
+                a = game.moveToAction((r, q, m))
                 if valid[a]:
                     break
             except ValueError:
@@ -61,4 +63,4 @@ class MCTSPlayer(Player):
 
     def play(self, game: Game):
         assert isinstance(game, Game)
-        return np.argmax(self.mcts.getActionProb(game, temp=0))
+        return int(np.argmax(self.mcts.getActionProb(game, temp=0)))

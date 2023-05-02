@@ -83,7 +83,7 @@ class Arena:
             twoWon: games won by player2
             draws:  games won by nobody
         """
-        assert isinstance(num, int) and num > 2
+        assert isinstance(num, int) and num >= 2
 
         wins = {self.player1: 0, self.player2: 0}
         draws = 0

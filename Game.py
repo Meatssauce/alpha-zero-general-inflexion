@@ -144,3 +144,7 @@ class Game:
             move: a tuple of integers (row, col, ...) representing the move
         """
         raise NotImplementedError
+
+    def display(self):
+        """Displays the current board."""
+        raise NotImplementedError

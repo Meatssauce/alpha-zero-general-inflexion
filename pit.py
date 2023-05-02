@@ -24,7 +24,7 @@ hp = HumanPlayer()
 
 # nnet players
 n1 = NNet(game)
-n1.load_checkpoint('./pretrained_models/inflexion/pytorch/', '7x7_100checkpoints_best.pth.tar')
+n1.load_checkpoint('./dev/models/inflexion/7x343x6/', 'best.pth.tar')
 args1 = dotdict({'numMCTSSims': 50, 'cpuct':1.0})
 mcts1 = MCTS(n1, args1)
 n1p = MCTSPlayer(mcts1)
@@ -33,7 +33,7 @@ if human_vs_cpu:
     player2 = hp
 else:
     n2 = NNet(game)
-    n2.load_checkpoint('./pretrained_models/inflexion/pytorch/', '8x8_100checkpoints_best.pth.tar')
+    n2.load_checkpoint('./dev/models/inflexion/7x343x6/', 'best.pth.tar')
     args2 = dotdict({'numMCTSSims': 50, 'cpuct': 1.0})
     mcts2 = MCTS(n2, args2)
     n2p = MCTSPlayer(mcts2)

@@ -15,6 +15,7 @@ from MCTS import MCTS
 from flags import PlayerColour, GameStatus
 from inflexion.InflexionPlayers import MCTSPlayer
 from inflexion.pytorch.NNet import NNetWrapper
+from inflexion.utils import render_board
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class Coach:
             for b, p in sym:
                 trainExamples.append([b, p, self.game.player])
 
-            action = np.random.choice(len(pi), p=pi)
+            action = int(np.random.choice(len(pi), p=pi))
             self.game, curPlayer = self.game.getNextState(action)
 
             self.game.player = curPlayer
@@ -131,7 +132,7 @@ class Coach:
             log.info('PITTING AGAINST PREVIOUS VERSION')
             player1 = MCTSPlayer(pmcts)
             player2 = MCTSPlayer(nmcts)
-            arena = Arena(player1, player2, self.game)
+            arena = Arena(player1, player2, self.game, self.game.display)
             pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
 
             log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
