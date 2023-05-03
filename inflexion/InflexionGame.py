@@ -109,27 +109,69 @@ class InflexionGame(Game):
         assert isinstance(pi, np.ndarray) and pi.size == self.actionSize
 
         pi = np.reshape(pi, self.policyShape)
-        symmetric_boards = []
-        for nb_rotation in range(2):
-            newBoard = np.rot90(board, 2 * nb_rotation)
-            newPi = np.rot90(pi, 2 * nb_rotation)
-            symmetric_boards.append((newBoard, newPi.ravel().tolist()))
 
-            for i in range(1, self.n):
+        symmetricBoards = self.rotationalSymmetries(board)
+        translations = []
+        for image in symmetricBoards:
+            translations += self.translations(image)
+        symmetricBoards += translations
+
+        symmetricPis = self.rotationalSymmetries(pi)
+        translations = []
+        for image in symmetricPis:
+            translations += self.translations(image)
+        symmetricPis += translations
+
+        return [(board_, pi_.ravel().tolist()) for board_, pi_ in zip(symmetricBoards, symmetricPis)]
+
+    def translations(self, boardLike: np.ndarray):
+        """Returns all translations of the board along the r, q, and s axes.
+
+        Args:
+            boardLike: the numpy array of shape (n, n, ...) to be translated
+
+        Returns:
+            a list of all translations of the board
+        """
+        assert isinstance(boardLike, np.ndarray) and boardLike.shape[:2] == (self.n, self.n)
+        translatedBoards = []
+        for i in range(1, self.n):
+            translatedBoards += [
                 # translation along r axis
-                translatedBoard = np.roll(newBoard, i, axis=0)
-                translatedPi = np.roll(newPi, i, axis=0)
-                symmetric_boards.append((translatedBoard, translatedPi.ravel().tolist()))
+                np.roll(boardLike, i, axis=0),
                 # translation along q axis
-                translatedBoard = np.roll(newBoard, i, axis=1)
-                translatedPi = np.roll(newPi, i, axis=1)
-                symmetric_boards.append((translatedBoard, translatedPi.ravel().tolist()))
-                # translation along p axis
-                translatedBoard = np.roll(np.roll(newBoard, 1, axis=1), -1, axis=0)
-                translatedPi = np.roll(np.roll(newPi, 1, axis=1), -1, axis=0)
-                symmetric_boards.append((translatedBoard, translatedPi.ravel().tolist()))
+                np.roll(boardLike, i, axis=1),
+                # translation along s axis
+                np.roll(np.roll(boardLike, i, axis=1), -i, axis=0)
+            ]
+        return translatedBoards
 
-        return symmetric_boards
+    def rotationalSymmetries(self, boardLike: np.ndarray):
+        """
+        Returns all rotational symmetries of the board.
+        Args:
+            boardLike: the board to be rotated
+
+        Returns:
+            a list of all rotational symmetries of the board
+
+        Hexagonal rotation works like this given r, q, s == 1, 2, 3
+            1, 2, 3 => 1, 2, 3  # 0
+            1, 2, 3 => -2, 3, 1  # 60
+            1, 2, 3 => -3, 1, -2  # 120
+            1, 2, 3 => -1, -2, -3  # 180
+            1, 2, 3 => 2, -3, -1  # 240
+            1, 2, 3 => 3, -1, 2  # 300
+        """
+        assert isinstance(boardLike, np.ndarray) and boardLike.shape[:2] == (self.n, self.n)
+        symmetricBoards = [boardLike.copy()]
+        r, q = np.indices((self.n, self.n))
+        s = (r + q) % self.n
+        orderOfSymmetry = 6  # range(0, 360, 60)
+        for i in range(1, orderOfSymmetry):
+            r, q, s = (-q) % self.n, s, r
+            symmetricBoards.append(boardLike[r, q].copy())
+        return symmetricBoards
 
     def stringRepresentation(self, board):
         return board.tostring()
@@ -192,7 +234,7 @@ class InflexionGame(Game):
             power = abs(piece)
             board[(r, q)] = (player.token, power)
 
-        dim = 7
+        dim = self.n
         output = ""
         for row in range(dim * 2 - 1):
             output += "    " * abs((dim - 1) - row)
@@ -299,8 +341,8 @@ class InflexionGame(Game):
         """
         bold_code = "\033[1m" if bold else ""
         color_code = ""
-        if color == "r":
+        if color == PlayerColour.RED.token:
             color_code = "\033[31m"
-        if color == "b":
+        if color == PlayerColour.BLUE.token:
             color_code = "\033[34m"
         return f"{bold_code}{color_code}{str}\033[0m"

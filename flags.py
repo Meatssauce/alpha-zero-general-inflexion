@@ -16,13 +16,14 @@ class PlayerColour(Enum):
         for player in cls:
             if player.owns(piece):
                 return player
-        return None
+        raise IndexError(f'No player owns piece {piece}')
 
     @property
     def opponent(self):
         for player in self.__class__:
             if player != self:
                 return player
+        raise IndexError('No opponent')
 
     def owns(self, piece: int | float | np.ndarray):
         return piece * self.num > 0
