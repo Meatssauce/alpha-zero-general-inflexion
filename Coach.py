@@ -4,6 +4,7 @@ import sys
 from collections import deque
 from pickle import Pickler, Unpickler
 from random import shuffle
+from time import sleep
 
 import numpy as np
 from tqdm import tqdm
@@ -91,10 +92,20 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
-                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                    mcts = MCTS(self.nnet, self.args)  # reset search tree
-                    game = self.game.reset()  # reset game
-                    iterationTrainExamples += self.executeEpisode(game, mcts)
+                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
+                #     mcts = MCTS(self.nnet, self.args)  # reset search tree
+                #     game = self.game.reset()  # reset game
+                #     iterationTrainExamples += self.executeEpisode(game, mcts)
+
+                with open('game', "wb") as f, open('args', 'wb') as g:
+                    Pickler(f).dump(self.game)
+                    Pickler(g).dump(self.args)
+                self.nnet.save_checkpoint('./temp/', 'mt.pth.bar')
+                os.system("python selfplay.py")
+                while not os.path.exists('iterationTrainExamples'):
+                    sleep(1)
+                with open('iterationTrainExamples', "rb") as f:
+                    iterationTrainExamples += Unpickler(f).load()
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)

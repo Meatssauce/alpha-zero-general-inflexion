@@ -1,3 +1,5 @@
+import uuid
+
 import numpy as np
 
 from Game import Game
@@ -6,8 +8,14 @@ from inflexion.InflexionGame import InflexionGame
 
 
 class Player:
+    def __init__(self):
+        self.id = uuid.uuid4()
+
     def play(self, game: Game):
         raise NotImplementedError
+
+    def __hash__(self):
+        return hash(self.id)
 
 
 class RandomPlayer(Player):
@@ -58,6 +66,7 @@ class GreedyPlayer(Player):
 
 class MCTSPlayer(Player):
     def __init__(self, mcts: MCTS):
+        super().__init__()
         assert isinstance(mcts, MCTS)
         self.mcts = mcts
 

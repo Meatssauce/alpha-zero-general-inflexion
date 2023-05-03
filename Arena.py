@@ -83,20 +83,34 @@ class Arena:
         """
         assert isinstance(num, int) and num >= 2
 
-        wins = {self.player1: 0, self.player2: 0}
+        totalWins = Counter()
+        totalDraws = 0
+        total = num // 2
+
+        with Pool() as p:
+            for i, (player1, player2) in enumerate([(self.player1, self.player2), (self.player2, self.player1)]):
+                args = ((player1, player2, verbose) for _ in range(total))
+
+                with tqdm(total=total, desc=f"Arena.playGames ({i})") as pbar:
+                    for wins, draws in p.imap_unordered(self.getGameResults, args):
+                        totalWins += wins
+                        totalDraws += draws
+                        pbar.update()
+
+        return totalWins[hash(self.player1)], totalWins[hash(self.player2)], totalDraws
+
+    def getGameResults(self, args):
+        player1, player2, verbose = args
+        wins = Counter()
         draws = 0
-
-        for i, (player1, player2) in enumerate([(self.player1, self.player2), (self.player2, self.player1)]):
-            for _ in tqdm(range(num // 2), desc=f"Arena.playGames ({i})"):
-                gameResult = self.playGame(player1=player1, player2=player2, verbose=verbose)
-                match gameResult:
-                    case GameStatus.DRAW:
-                        draws += 1
-                    case GameStatus.WON:
-                        wins[player1] += 1
-                    case GameStatus.LOST:
-                        wins[player2] += 1
-                    case _:
-                        raise ValueError(f'Unexpected game status: {gameResult}')
-
-        return wins[self.player1], wins[self.player2], draws
+        gameResult = self.playGame(player1=player1, player2=player2, verbose=verbose)
+        match gameResult:
+            case GameStatus.DRAW:
+                draws += 1
+            case GameStatus.WON:
+                wins[hash(player1)] += 1
+            case GameStatus.LOST:
+                wins[hash(player2)] += 1
+            case _:
+                raise ValueError(f'Unexpected game status: {gameResult}')
+        return wins, draws
