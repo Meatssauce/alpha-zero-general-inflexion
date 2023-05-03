@@ -25,7 +25,7 @@ args = dotdict({
     'load_model': False,
     'load_folder_file': ('./dev/models/inflexion/7x343x6', 'best.pth.tar'),
     'numItersForTrainExamplesHistory': 20,
-
+    'sharedPath': './shared'
 })
 
 

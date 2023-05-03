@@ -58,11 +58,11 @@ def executeEpisode(items):
 
 
 def main():
-    with open('game', "rb") as f, open('args', 'rb') as g:
+    with open('./shared/game', "rb") as f, open('./shared/args', 'rb') as g:
         game = Unpickler(f).load()
         args = Unpickler(g).load()
     nnet = NNetWrapper(game)
-    nnet.load_checkpoint('./temp/', 'mt.pth.bar')
+    nnet.load_checkpoint(folder='./shared', filename='nnet.pth.bar')
 
     iterationTrainExamples = []
 
@@ -72,7 +72,7 @@ def main():
             iterationTrainExamples += results
             pbar.update()
 
-    with open('iterationTrainExamples', "wb") as f:
+    with open('./shared/iterationTrainExamples', "wb") as f:
         Pickler(f).dump(iterationTrainExamples)
 
 

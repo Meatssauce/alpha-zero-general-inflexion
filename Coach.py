@@ -97,14 +97,16 @@ class Coach:
                 #     game = self.game.reset()  # reset game
                 #     iterationTrainExamples += self.executeEpisode(game, mcts)
 
-                with open('game', "wb") as f, open('args', 'wb') as g:
+                os.makedirs(self.args.sharedPath, exist_ok=True)
+                with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
+                        open(os.path.join(self.args.sharedPath, 'args'), 'wb') as g:
                     Pickler(f).dump(self.game)
                     Pickler(g).dump(self.args)
-                self.nnet.save_checkpoint('./temp/', 'mt.pth.bar')
+                self.nnet.save_checkpoint(self.args.sharedPath, 'nnet.pth.bar')
                 os.system("python selfplay.py")
-                while not os.path.exists('iterationTrainExamples'):
+                while not os.path.exists(os.path.join(self.args.sharedPath, 'iterationTrainExamples')):
                     sleep(1)
-                with open('iterationTrainExamples', "rb") as f:
+                with open(os.path.join(self.args.sharedPath, 'iterationTrainExamples'), "rb") as f:
                     iterationTrainExamples += Unpickler(f).load()
 
                 # save the iteration examples to the history 
