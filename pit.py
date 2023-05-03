@@ -16,7 +16,11 @@ any agent.
 """
 
 
-def getPlayer(kind: str, game: Game):
+def getPlayer(kind: str, game: Game, folder: str = None, filename: str = None):
+    if folder is None:
+        folder = './dev/models/inflexion/7x343x6'
+    if filename is None:
+        filename = 'best.pth.tar'
     match kind:  # random, greedy, mcts, human
         case "human":
             player = HumanPlayer()
@@ -26,7 +30,7 @@ def getPlayer(kind: str, game: Game):
             player = GreedyPlayer()
         case "mcts":
             nn = NNet(game)
-            nn.load_checkpoint('./dev/models/inflexion/7x343x6/', 'best.pth.tar')
+            nn.load_checkpoint(folder=folder, filename=filename)
             args = dotdict({'numMCTSSims': 50, 'cpuct': 1.0})
             mcts = MCTS(nn, args)
             player = MCTSPlayer(mcts)
@@ -37,7 +41,8 @@ def getPlayer(kind: str, game: Game):
 
 def main():
     game = InflexionGame(7, maxTurns=343, maxPower=6)
-    player1 = getPlayer("random", game)
+    player1 = getPlayer("mcts", game, filename='best.pth.tar')
+    # player2 = getPlayer("mcts", game, filename='best2.pth.tar')
     player2 = getPlayer("greedy", game)
     arena = Arena.Arena(player1, player2, game)
 
