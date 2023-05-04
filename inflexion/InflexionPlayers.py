@@ -11,7 +11,7 @@ class Player:
     def __init__(self):
         self.id = uuid.uuid4()
 
-    def play(self, game: Game):
+    def play(self, game: Game) -> int:
         raise NotImplementedError
 
     def __hash__(self):
@@ -19,7 +19,7 @@ class Player:
 
 
 class RandomPlayer(Player):
-    def play(self, game: Game):
+    def play(self, game: Game) -> int:
         assert isinstance(game, Game)
         actions = np.arange(game.getActionSize())
         valids = game.getValidMoves()
@@ -29,7 +29,7 @@ class RandomPlayer(Player):
 
 
 class HumanPlayer(Player):
-    def play(self, game: Game):
+    def play(self, game: Game) -> int:
         assert isinstance(game, Game)
         # display(board)
         valid = game.getValidMoves()
@@ -50,7 +50,7 @@ class HumanPlayer(Player):
 
 
 class GreedyPlayer(Player):
-    def play(self, game: Game):
+    def play(self, game: Game) -> int:
         assert isinstance(game, Game)
         valids = game.getValidMoves()
         candidates = []

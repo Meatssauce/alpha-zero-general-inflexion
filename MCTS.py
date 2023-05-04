@@ -44,7 +44,7 @@ class MCTS:
         for i in range(self.args.numMCTSSims):
             self.search(game)
 
-        s = game.canonicalBoard.tobytes()
+        s = game.getCanonicalBoard().tobytes()
         counts = np.array([self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(game.getActionSize())])
 
         if temp == 0:
@@ -79,7 +79,7 @@ class MCTS:
         """
         assert isinstance(game, Game)
 
-        s = game.canonicalBoard.tobytes()
+        s = game.getCanonicalBoard().tobytes()
 
         if (gameStatus := game.getGameEnded()) != GameStatus.ONGOING:
             # terminal node
@@ -87,7 +87,7 @@ class MCTS:
 
         if s not in self.Ps:
             # leaf node
-            policies, v = self.nnet.predict(game.canonicalBoard)
+            policies, v = self.nnet.predict(game.getCanonicalBoard())
             valids = game.getValidMoves()
             policies *= valids  # masking invalid moves
             sum_Ps_s = policies.sum()

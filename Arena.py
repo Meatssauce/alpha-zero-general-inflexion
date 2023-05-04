@@ -45,7 +45,7 @@ class Arena:
         assert isinstance(player1, Player) and isinstance(player2, Player)
 
         player = cycle([player1, player2])
-        game = self.game.clone()
+        game = self.game
         assert game.currTurn == 0
         it = 0
         while game.getGameEnded() == GameStatus.ONGOING:

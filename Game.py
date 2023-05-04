@@ -1,3 +1,5 @@
+import numpy as np
+
 from flags import PlayerColour, GameStatus
 
 
@@ -12,14 +14,6 @@ class Game:
         self.firstMover = firstMover
         self._player = firstMover
         self.gameStatus = GameStatus.ONGOING
-
-    @property
-    def canonicalBoard(self):
-        """
-        Returns:
-            canonicalBoard: a copy of the board in the canonical form of the current player used as nn input
-        """
-        raise NotImplementedError
 
     @property
     def player(self):
@@ -40,35 +34,42 @@ class Game:
         self._player = player
         self.gameStatus = self.gameStatus.opposite()
 
-    def clone(self):
+    def clone(self) -> 'Game':
         """
         Returns:
             game: a deep copy of the current game
         """
         raise NotImplementedError
 
-    def reset(self):
+    def reset(self) -> 'Game':
         """
         Returns:
             newGame: a game instance with the same initial parameters in its initial state
         """
         raise NotImplementedError
 
-    def getBoardSize(self):
+    def getCanonicalBoard(self) -> np.ndarray:
+        """
+        Returns:
+            canonicalBoard: a copy of the board in the canonical form of the current player used as nn input
+        """
+        raise NotImplementedError
+
+    def getBoardSize(self) -> tuple:
         """
         Returns:
             boardSize: a tuple of integers (m, n) specifying the board dimensions
         """
         raise NotImplementedError
 
-    def getActionSize(self):
+    def getActionSize(self) -> int:
         """
         Returns:
             actionSize: integer number of all possible actions
         """
         raise NotImplementedError
 
-    def getNextState(self, action: int):
+    def getNextState(self, action: int) -> tuple['Game', PlayerColour]:
         """Take an action, applies it to the current board and returns the next board and player.
 
         Input:
@@ -80,7 +81,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def getValidMoves(self):
+    def getValidMoves(self) -> np.ndarray:
         """
         Returns:
             validMoves: a binary vector of length self.getActionSize(), 1 for
@@ -89,7 +90,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def getGameEnded(self):
+    def getGameEnded(self) -> GameStatus:
         """Returns the won/lost/draw/ongoing status of the current game with respect to the current player.
 
         Returns:
@@ -98,7 +99,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def getSymmetries(self, board, pi):
+    def getSymmetries(self, board: np.ndarray, pi: np.ndarray) -> list[tuple[np.ndarray, list]]:
         """Get all symmetric forms of the board and pi vector.
 
         Input:
@@ -123,14 +124,14 @@ class Game:
         """
         raise NotImplementedError
 
-    def getScore(self):
+    def getScore(self) -> int:
         """
         Returns:
             score: an integer representing the score of the current player
         """
         raise NotImplementedError
 
-    def moveToAction(self, move: tuple | list):
+    def moveToAction(self, move: tuple | list) -> int:
         """Converts a move tuple to an action integer.
 
         Input:
@@ -141,7 +142,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def actionToMove(self, action: int):
+    def actionToMove(self, action: int) -> tuple[int, int, int]:
         """Converts an action integer to a move tuple.
 
         Input:

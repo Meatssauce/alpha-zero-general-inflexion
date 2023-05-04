@@ -62,7 +62,7 @@ class Coach:
 
             # get action probabilities from the perspective of current player
             pi = mcts.getActionProb(game, temp=temp)
-            sym = game.getSymmetries(game.canonicalBoard, pi)
+            sym = game.getSymmetries(game.getCanonicalBoard(), pi)
             for b, p in sym:
                 trainExamples.append([b, p, game.player])
 

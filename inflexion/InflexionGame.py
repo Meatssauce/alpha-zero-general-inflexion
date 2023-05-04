@@ -25,14 +25,14 @@ class InflexionGame(Game):
             self.direction = direction
 
         @classmethod
-        def fromNum(cls, num: int):
+        def fromNum(cls, num: int) -> 'InflexionGame.Move':
             for move in cls:
                 if move.num == num:
                     return move
             raise IndexError(f"Move number {num} is not valid.")
 
         @classmethod
-        def allSpreads(cls):
+        def allSpreads(cls) -> tuple['InflexionGame.Move', ...]:
             return cls.SPREAD_R1, cls.SPREAD_R2, cls.SPREAD_Q1, cls.SPREAD_Q2, cls.SPREAD_P1, cls.SPREAD_P2
 
     def __init__(self, n: int,
@@ -65,29 +65,28 @@ class InflexionGame(Game):
         self.policyShape = self.n, self.n, self.maxActionsPerCell
         # self.movesHistory = []
 
-    @property
-    def canonicalBoard(self):
-        return self.board * self.player.num
-
     @classmethod
     def fromGame(cls, game: 'InflexionGame'):
         assert isinstance(game, InflexionGame)
         return cls(game.n, firstMover=game.firstMover, currPlayer=game.player, board=game.board.copy(),
                    currTurn=game.currTurn, maxTurns=game.maxTurns, maxPower=game.maxPower)
 
-    def clone(self):
+    def clone(self) -> 'InflexionGame':
         return InflexionGame.fromGame(self)
 
-    def reset(self):
+    def reset(self) -> 'InflexionGame':
         return InflexionGame(self.n, firstMover=self.firstMover, maxTurns=self.maxTurns, maxPower=self.maxPower)
 
-    def getBoardSize(self):
+    def getCanonicalBoard(self) -> np.ndarray:
+        return self.board * self.player.num
+
+    def getBoardSize(self) -> tuple:
         return self.n, self.n
 
-    def getActionSize(self):
+    def getActionSize(self) -> int:
         return self.actionSize
 
-    def getNextState(self, action: int):
+    def getNextState(self, action: int) -> tuple['InflexionGame', PlayerColour]:
         assert isinstance(action, int) and 0 <= action < self.actionSize
         move = self.actionToMove(action)
         nextGame = self.clone()
@@ -95,16 +94,16 @@ class InflexionGame(Game):
         assert nextGame.currTurn == self.currTurn + 1
         return nextGame, self.player.opponent
 
-    def getValidMoves(self):
+    def getValidMoves(self) -> np.ndarray:
         valids = np.zeros(self.policyShape)
         legalMoves = np.array(self.getLegalMoves(self.player))
         valids[tuple(legalMoves.T)] = 1
         return valids.ravel()
 
-    def getGameEnded(self):
+    def getGameEnded(self) -> GameStatus:
         return self.gameStatus
 
-    def getSymmetries(self, board: np.ndarray, pi: np.ndarray):
+    def getSymmetries(self, board: np.ndarray, pi: np.ndarray) -> list[tuple[np.ndarray, list]]:
         assert isinstance(board, np.ndarray) and board.shape == (self.n, self.n)
         assert isinstance(pi, np.ndarray) and pi.size == self.actionSize
 
@@ -124,7 +123,7 @@ class InflexionGame(Game):
 
         return [(board_, pi_.ravel().tolist()) for board_, pi_ in zip(symmetricBoards, symmetricPis)]
 
-    def translations(self, boardLike: np.ndarray):
+    def translations(self, boardLike: np.ndarray) -> list[np.ndarray]:
         """Returns all translations of the board along the r, q, and s axes.
 
         Args:
@@ -146,7 +145,7 @@ class InflexionGame(Game):
             ]
         return translatedBoards
 
-    def rotationalSymmetries(self, boardLike: np.ndarray):
+    def rotationalSymmetries(self, boardLike: np.ndarray) -> list[np.ndarray]:
         """
         Returns all rotational symmetries of the board.
         Args:
@@ -176,15 +175,15 @@ class InflexionGame(Game):
     def stringRepresentation(self, board):
         return board.tostring()
 
-    def getScore(self):
+    def getScore(self) -> int:
         return self.countQuantityDiff(self.player)
 
-    def moveToAction(self, move: tuple | list):
+    def moveToAction(self, move: tuple | list) -> int:
         r, q, moveType = move
         assert 0 <= r < self.n and 0 <= q < self.n and moveType in InflexionGame.Move
         return r * self.n * self.maxActionsPerCell + q * self.maxActionsPerCell + moveType.num
 
-    def actionToMove(self, action: int):
+    def actionToMove(self, action: int) -> tuple[int, int, Move]:
         assert 0 <= action < self.actionSize
         maxActionsPerRow = self.n * self.maxActionsPerCell
         ActionIdxInRow = action % maxActionsPerRow
@@ -194,7 +193,7 @@ class InflexionGame(Game):
         r = action // maxActionsPerRow
         return r, q, moveType
 
-    def display(self, ansi=True):
+    def display(self, ansi=False):
         """
         Visualise the Infexion hex board via a multiline ASCII string.
         The layout corresponds to the axial coordinate system as described in the
@@ -293,14 +292,14 @@ class InflexionGame(Game):
         elif (self.board == 0).all():
             self.gameStatus = GameStatus.DRAW
 
-    def countPowerDiff(self, player: PlayerColour):
+    def countPowerDiff(self, player: PlayerColour) -> int:
         """Count the total power difference for the given player"""
         assert player in PlayerColour
         total = self.board.sum()
         adjusted = player.num * total
         return adjusted
 
-    def getLegalMoves(self, player: PlayerColour):
+    def getLegalMoves(self, player: PlayerColour) -> list[tuple[int, int, int]]:
         """Return all legal moves for the player"""
         assert player in PlayerColour
         moves = []
@@ -309,7 +308,7 @@ class InflexionGame(Game):
             moves += new_moves
         return moves
 
-    def getMovesForCell(self, cell: tuple[int, int], player: PlayerColour):
+    def getMovesForCell(self, cell: tuple[int, int], player: PlayerColour) -> list[tuple[int, int, int]]:
         assert player in PlayerColour
         assert len(cell) == 2 and all(isinstance(x, int) for x in cell)
         r, q = cell
@@ -319,7 +318,7 @@ class InflexionGame(Game):
             return [(r, q, move.num) for move in InflexionGame.Move.allSpreads()]
         return []
 
-    def countQuantityDiff(self, player: PlayerColour):
+    def countQuantityDiff(self, player: PlayerColour) -> int:
         """Count the # pieces difference for the given player"""
         assert player in PlayerColour
         diff = self.board[player.owns(self.board)].size - self.board[player.opponent.owns(self.board)].size
