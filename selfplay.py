@@ -1,11 +1,12 @@
 import os
 import logging
 import sys
-from multiprocessing import Pool
+from torch.multiprocessing import Pool
 from pickle import Pickler, Unpickler
 
 import numpy as np
 from tqdm import tqdm
+import torch
 
 from Game import Game
 from MCTS import MCTS
@@ -13,6 +14,7 @@ from flags import GameStatus
 from inflexion.pytorch.NNet import NNetWrapper
 
 log = logging.getLogger(__name__)
+torch.multiprocessing.set_start_method('spawn', force=True)
 
 
 def executeEpisode(items):
@@ -63,11 +65,12 @@ def main():
         args = Unpickler(g).load()
     nnet = NNetWrapper(game)
     nnet.load_checkpoint(folder='./shared', filename='nnet.pth.bar')
+    mcts = MCTS(nnet, args)
 
     iterationTrainExamples = []
 
     with Pool() as p, tqdm(total=args.numEps, desc="Self Play") as pbar:
-        items = ((game.reset(), MCTS(nnet, args), args) for _ in range(args.numEps))
+        items = ((game, mcts.reset(), args) for _ in range(args.numEps))
         for results in p.imap_unordered(executeEpisode, items):
             iterationTrainExamples += results
             pbar.update()

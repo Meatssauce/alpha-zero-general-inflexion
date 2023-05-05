@@ -1,5 +1,3 @@
-from multiprocessing import freeze_support
-
 import Arena
 from Game import Game
 from MCTS import MCTS
@@ -42,13 +40,12 @@ def getPlayer(kind: str, game: Game, folder: str = None, filename: str = None):
 def main():
     game = InflexionGame(7, maxTurns=343, maxPower=6)
     player1 = getPlayer("mcts", game, filename='best.pth.tar')
-    player2 = getPlayer("mcts", game, filename='best1.pth.tar')
+    player2 = getPlayer("mcts", game, filename='best2.pth.tar')
     # player2 = getPlayer("greedy", game)
     arena = Arena.Arena(player1, player2, game)
 
-    print(arena.playGames(4, verbose=False))
+    print(arena.playGames(20, verbose=False))
 
 
 if __name__ == "__main__":
-    # freeze_support()
     main()

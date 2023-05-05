@@ -2,7 +2,8 @@ import logging
 from collections import Counter
 from copy import deepcopy
 from itertools import cycle
-from multiprocessing import Pool
+from torch.multiprocessing import Pool
+import torch
 from time import sleep
 
 from tqdm import tqdm
@@ -11,6 +12,7 @@ from flags import PlayerColour, GameStatus
 from inflexion.InflexionPlayers import Player
 
 log = logging.getLogger(__name__)
+torch.multiprocessing.set_start_method('spawn', force=True)
 
 
 class Arena:

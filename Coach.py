@@ -5,6 +5,9 @@ from collections import deque
 from pickle import Pickler, Unpickler
 from random import shuffle
 from time import sleep
+from torch.multiprocessing import Pool
+import torch
+from time import sleep
 
 import numpy as np
 from tqdm import tqdm
@@ -17,6 +20,7 @@ from inflexion.InflexionPlayers import MCTSPlayer
 from inflexion.pytorch.NNet import NNetWrapper
 
 log = logging.getLogger(__name__)
+torch.multiprocessing.set_start_method('spawn', force=True)
 
 
 class Coach:
@@ -35,7 +39,7 @@ class Coach:
         self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
         self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
-    def executeEpisode(self, game, mcts):
+    def executeEpisode(self, args):
         """
         This function executes one episode of self-play, starting with player 1.
         As the game is played, each turn is added as a training example to
@@ -51,7 +55,7 @@ class Coach:
                            pi is the MCTS informed policy vector, v is +1 if
                            the player eventually won the game, else -1.
         """
-        # game, mcts = args
+        game, mcts = args
         assert isinstance(game, Game) and isinstance(mcts, MCTS)
         trainExamples = []
         episodeStep = 0
@@ -98,17 +102,24 @@ class Coach:
                 #     game = self.game.reset()  # reset game
                 #     iterationTrainExamples += self.executeEpisode(game, mcts)
 
-                os.makedirs(self.args.sharedPath, exist_ok=True)
-                with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
-                        open(os.path.join(self.args.sharedPath, 'args'), 'wb') as g:
-                    Pickler(f).dump(self.game)
-                    Pickler(g).dump(self.args)
-                self.nnet.save_checkpoint(self.args.sharedPath, 'nnet.pth.bar')
-                os.system("python selfplay.py")
-                while not os.path.exists(os.path.join(self.args.sharedPath, 'iterationTrainExamples')):
-                    sleep(1)
-                with open(os.path.join(self.args.sharedPath, 'iterationTrainExamples'), "rb") as f:
-                    iterationTrainExamples += Unpickler(f).load()
+                # os.makedirs(self.args.sharedPath, exist_ok=True)
+                # with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
+                #         open(os.path.join(self.args.sharedPath, 'args'), 'wb') as g:
+                #     Pickler(f).dump(self.game)
+                #     Pickler(g).dump(self.args)
+                # self.nnet.save_checkpoint(self.args.sharedPath, 'nnet.pth.bar')
+                # os.system("python selfplay.py")
+                # while not os.path.exists(os.path.join(self.args.sharedPath, 'iterationTrainExamples')):
+                #     sleep(1)
+                # with open(os.path.join(self.args.sharedPath, 'iterationTrainExamples'), "rb") as f:
+                #     iterationTrainExamples += Unpickler(f).load()
+                
+                with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
+                    items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
+                    for results in p.imap_unordered(self.executeEpisode, items):
+                        iterationTrainExamples += results
+                        pbar.update()
+                    sleep(5)
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
