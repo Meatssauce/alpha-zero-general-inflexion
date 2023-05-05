@@ -57,28 +57,39 @@ class Coach:
         """
         game, mcts = args
         assert isinstance(game, Game) and isinstance(mcts, MCTS)
-        trainExamples = []
+        policyPlanes = []
+        boardStacks = []
+        players = []
         episodeStep = 0
 
         while True:
             episodeStep += 1
             temp = int(episodeStep < self.args.tempThreshold)
 
-            # get action probabilities from the perspective of current player
+            # Get action probabilities from the perspective of current player
+            # temp1 = game.board.copy()
             pi = mcts.getActionProb(game, temp=temp)
-            sym = game.getSymmetries(game.toNNetInput(), pi)
-            for b, p in sym:
-                trainExamples.append([b, p, game.player])
+            assert isinstance(pi, np.ndarray) and pi.size == self.game.getActionSize()
 
+            policyPlane = pi.reshape(self.game.policyShape)
+            boardStack = game.toNNetInput()
+
+            policyPlanes += game.symmetries(policyPlane)
+            boardStacks += game.symmetries(boardStack)
+            players += [game.player] * len(policyPlanes)
+
+            # assert (game.board == temp1).all()
             action = np.random.choice(len(pi), p=pi)
             game, curPlayer = game.getNextState(action)
 
             game.player = curPlayer
             result = game.getGameEnded()
 
-            if result != GameStatus.ONGOING:
-                return [(board, policy, result.value if player == curPlayer else -result.value)
-                        for board, policy, player in trainExamples]
+            if result == GameStatus.ONGOING:
+                continue
+
+            return [(board, policy.ravel().tolist(), result.value if player == curPlayer else -result.value)
+                    for board, policy, player in zip(boardStacks, policyPlanes, players)]
 
     def learn(self):
         """
@@ -97,10 +108,10 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
-                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                #     mcts = MCTS(self.nnet, self.args)  # reset search tree
-                #     game = self.game.reset()  # reset game
-                #     iterationTrainExamples += self.executeEpisode((game, mcts))
+                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
+                    mcts = MCTS(self.nnet, self.args)  # reset search tree
+                    game = self.game.reset()  # reset game
+                    iterationTrainExamples += self.executeEpisode((game, mcts))
 
                 # os.makedirs(self.args.sharedPath, exist_ok=True)
                 # with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
@@ -114,12 +125,12 @@ class Coach:
                 # with open(os.path.join(self.args.sharedPath, 'iterationTrainExamples'), "rb") as f:
                 #     iterationTrainExamples += Unpickler(f).load()
                 
-                with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
-                    items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
-                    for results in p.imap_unordered(self.executeEpisode, items):
-                        iterationTrainExamples += results
-                        pbar.update()
-                    sleep(5)
+                # with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
+                #     items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
+                #     for results in p.imap_unordered(self.executeEpisode, items):
+                #         iterationTrainExamples += results
+                #         pbar.update()
+                #     sleep(5)
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)

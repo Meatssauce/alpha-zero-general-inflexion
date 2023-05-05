@@ -92,7 +92,7 @@ class Game:
         """
         raise NotImplementedError
 
-    def getSymmetries(self, board: np.ndarray, pi: np.ndarray) -> list[tuple[np.ndarray, list]]:
+    def symmetries(self, boardLike: np.ndarray) -> list[tuple[np.ndarray, list]]:
         """Get all symmetric forms of the board and pi vector.
 
         Input:

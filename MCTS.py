@@ -1,5 +1,6 @@
 import logging
 import math
+from itertools import product
 
 import numpy as np
 
@@ -87,10 +88,15 @@ class MCTS:
 
         if s not in self.Ps:
             # leaf node
+            temp = game.board.copy()
             input_ = game.toNNetInput()
-            # input_ = game.getSymmetry(input_, np.random.randint(0, 10), np.random.randint(0, 7))
+            input_ = game.randomSymmetry(input_)
             policies, v = self.nnet.predict(input_)
+            assert (game.board == temp).all()
             valids = game.getValidMoves()
+            # for i in range(game.getActionSize()):
+            #     valid = game.isValidAction(i)
+            #     assert (not valids[i] and not valid) or (valids[i] and valid)
             policies *= valids  # masking invalid moves
             sum_Ps_s = policies.sum()
 

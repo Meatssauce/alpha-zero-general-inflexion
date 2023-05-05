@@ -44,7 +44,7 @@ def executeEpisode(items):
 
         # get action probabilities from the perspective of current player
         pi = mcts.getActionProb(game, temp=temp)
-        sym = game.getSymmetries(game.getCanonicalBoard(), pi)
+        sym = game.symmetries(game.getCanonicalBoard())
         for b, p in sym:
             trainExamples.append([b, p, game.player])
 
