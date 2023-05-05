@@ -4,7 +4,6 @@ import sys
 from collections import deque
 from pickle import Pickler, Unpickler
 from random import shuffle
-from time import sleep
 from torch.multiprocessing import Pool
 import torch
 from time import sleep
@@ -16,7 +15,7 @@ from Arena import Arena
 from Game import Game
 from MCTS import MCTS
 from flags import PlayerColour, GameStatus
-from inflexion.InflexionPlayers import MCTSPlayer
+from inflexion.InflexionPlayers import MCTSPlayer, RandomPlayer, GreedyPlayer
 from inflexion.pytorch.NNet import NNetWrapper
 
 log = logging.getLogger(__name__)
@@ -69,9 +68,9 @@ class Coach:
             # Get action probabilities from the perspective of current player
             # temp1 = game.board.copy()
             pi = mcts.getActionProb(game, temp=temp)
-            assert isinstance(pi, np.ndarray) and pi.size == self.game.getActionSize()
+            assert isinstance(pi, np.ndarray) and pi.size == game.getActionSize()
 
-            policyPlane = pi.reshape(self.game.policyShape)
+            policyPlane = pi.reshape(game.policyShape)
             boardStack = game.toNNetInput()
 
             policyPlanes += game.symmetries(policyPlane)
@@ -99,7 +98,7 @@ class Coach:
         only if it wins >= updateThreshold fraction of games.
         """
 
-        pitInterval = 1
+        pitInterval = 5
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
             log.info(f'Starting Iter #{i} ...')
@@ -129,7 +128,7 @@ class Coach:
                 #     for results in p.imap_unordered(self.executeEpisode, items):
                 #         iterationTrainExamples += results
                 #         pbar.update()
-                #     sleep(5)
+                #     sleep(3)
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -149,31 +148,27 @@ class Coach:
                 trainExamples.extend(e)
             shuffle(trainExamples)
 
-            # training new network, keeping a copy of the old one
-            self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-
+            # training new network
             self.nnet.train(trainExamples)
+            self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
 
             if i % pitInterval != 0:
                 continue
 
-            log.info('PITTING AGAINST PREVIOUS VERSION')
-            pmcts = MCTS(self.pnet, self.args)
+            log.info('PITTING AGAINST BASELINES')
             nmcts = MCTS(self.nnet, self.args)
-            player1 = MCTSPlayer(pmcts)
-            player2 = MCTSPlayer(nmcts)
-            arena = Arena(player1, player2, self.game.reset())
-            pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
+            player1 = MCTSPlayer(nmcts)
 
-            log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
-            if pwins + nwins == 0 or float(nwins) / (pwins + nwins) < self.args.updateThreshold:
-                log.info('REJECTING NEW MODEL')
-                self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            else:
-                log.info('ACCEPTING NEW MODEL')
-                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=self.getCheckpointFile(i))
-                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
+            player2 = RandomPlayer()
+            arena = Arena(player1, player2, self.game.reset())
+            p1wins, p2wins, draws = arena.playGames(self.args.arenaCompare)
+
+            log.info('NEW/RANDOM WINS : %d / %d ; DRAWS : %d' % (p1wins, p2wins, draws))
+
+            player2 = GreedyPlayer()
+            arena = Arena(player1, player2, self.game.reset())
+            p1wins, p2wins, draws = arena.playGames(self.args.arenaCompare)
+            log.info('NEW/GREEDY WINS : %d / %d ; DRAWS : %d' % (p1wins, p2wins, draws))
 
     def getCheckpointFile(self, iteration):
         return 'checkpoint_' + str(iteration) + '.pth.tar'

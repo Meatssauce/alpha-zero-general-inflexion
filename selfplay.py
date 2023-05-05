@@ -35,7 +35,9 @@ def executeEpisode(items):
     """
     game, mcts, args = items
     assert isinstance(game, Game) and isinstance(mcts, MCTS)
-    trainExamples = []
+    policyPlanes = []
+    boardStacks = []
+    players = []
     episodeStep = 0
 
     while True:
@@ -44,18 +46,26 @@ def executeEpisode(items):
 
         # get action probabilities from the perspective of current player
         pi = mcts.getActionProb(game, temp=temp)
-        sym = game.symmetries(game.getCanonicalBoard())
-        for b, p in sym:
-            trainExamples.append([b, p, game.player])
+        assert isinstance(pi, np.ndarray) and pi.size == game.getActionSize()
 
+        policyPlane = pi.reshape(game.policyShape)
+        boardStack = game.toNNetInput()
+
+        policyPlanes += game.symmetries(policyPlane)
+        boardStacks += game.symmetries(boardStack)
+        players += [game.player] * len(policyPlanes)
+
+        # assert (game.board == temp1).all()
         action = np.random.choice(len(pi), p=pi)
         game, curPlayer = game.getNextState(action)
 
         result = game.getGameEnded()
 
-        if result != GameStatus.ONGOING:
-            return [(board, policy, result.value if player == curPlayer else -result.value)
-                    for board, policy, player in trainExamples]
+        if result == GameStatus.ONGOING:
+            continue
+
+        return [(board, policy.ravel().tolist(), result.value if player == curPlayer else -result.value)
+                for board, policy, player in zip(boardStacks, policyPlanes, players)]
 
 
 def main():
