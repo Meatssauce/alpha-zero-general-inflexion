@@ -69,9 +69,17 @@ class InflexionGame(Game):
     def reset(self) -> 'InflexionGame':
         return InflexionGame(self.n, firstMover=self.firstMover, maxTurns=self.maxTurns, maxPower=self.maxPower)
 
-    def getCanonicalBoard(self) -> np.ndarray:
-        return self.board * self.player.num
-
+    def toNNetInput(self) -> np.ndarray:
+        # return self.player.num * self.board
+        playerPieces = (self.board == self.player.num).astype(np.int8)
+        opponentPieces = (self.board == self.player.opponent.num).astype(np.int8)
+        totalMoves = np.ones(self.getBoardSize(), dtype=np.int8) * self.currTurn
+        
+        return np.stack([playerPieces, opponentPieces, totalMoves], axis=2)
+    
+    def nnetInputShape(self):
+        return self.n, self.n, 3
+        
     def getBoardSize(self) -> tuple:
         return self.n, self.n
 
@@ -114,6 +122,10 @@ class InflexionGame(Game):
         symmetricPis += translations
 
         return [(board_, pi_.ravel().tolist()) for board_, pi_ in zip(symmetricBoards, symmetricPis)]
+    
+    def getSymmetry(self, boardLike: np.ndarray, numRotations: int, numTranslations: int) -> np.ndarray:
+        assert isinstance(boardLike, np.ndarray) and boardLike.shape == (self.n, self.n)
+        
 
     def translations(self, boardLike: np.ndarray) -> list[np.ndarray]:
         """Returns all translations of the board along the r, q, and s axes.
@@ -125,6 +137,8 @@ class InflexionGame(Game):
             a list of all translations of the board
         """
         assert isinstance(boardLike, np.ndarray) and boardLike.shape[:2] == (self.n, self.n)
+        assert isinstance(kth, int)
+        
         translatedBoards = []
         for i in range(1, self.n):
             translatedBoards += [
@@ -136,6 +150,33 @@ class InflexionGame(Game):
                 np.roll(np.roll(boardLike, i, axis=1), -i, axis=0)
             ]
         return translatedBoards
+        
+
+    def translation(self, boardLike: np.ndarray, kth: int) -> np.ndarray:
+        """Returns all translations of the board along the r, q, and s axes.
+
+        Args:
+            boardLike: the numpy array of shape (n, n, ...) to be translated
+
+        Returns:
+            a list of all translations of the board
+        """
+        assert isinstance(boardLike, np.ndarray) and boardLike.shape[:2] == (self.n, self.n)
+        assert isinstance(kth, int)
+        
+        distance = (kth // 3) % self.n
+        axis = kth % 3
+        match axis:
+            case 0:
+                # translation along r axis
+                return np.roll(boardLike, distance, axis=0),
+            case 1:
+                # translation along q axis
+                return np.roll(boardLike, distance, axis=1),
+            case 2:
+                # translation along s axis
+                return np.roll(np.roll(boardLike, distance, axis=1), -i, axis=0)
+        raise ValueError("not supposed to reach here")
 
     def rotationalSymmetries(self, boardLike: np.ndarray) -> list[np.ndarray]:
         """
@@ -155,6 +196,7 @@ class InflexionGame(Game):
             1, 2, 3 => 3, -1, 2  # 300
         """
         assert isinstance(boardLike, np.ndarray) and boardLike.shape[:2] == (self.n, self.n)
+        
         symmetricBoards = [boardLike.copy()]
         r, q = np.indices((self.n, self.n))
         s = (r + q) % self.n
@@ -163,6 +205,34 @@ class InflexionGame(Game):
             r, q, s = (-q) % self.n, s, r
             symmetricBoards.append(boardLike[r, q].copy())
         return symmetricBoards
+    
+    def rotationalSymmetry(self, boardLike: np.ndarray, kth: int) -> np.ndarray:
+        """
+        Returns all rotational symmetries of the board.
+        Args:
+            boardLike: the board to be rotated
+
+        Returns:
+            a list of all rotational symmetries of the board
+
+        Hexagonal rotation works like this given r, q, s == 1, 2, 3
+            1, 2, 3 => 1, 2, 3  # 0
+            1, 2, 3 => -2, 3, 1  # 60
+            1, 2, 3 => -3, 1, -2  # 120
+            1, 2, 3 => -1, -2, -3  # 180
+            1, 2, 3 => 2, -3, -1  # 240
+            1, 2, 3 => 3, -1, 2  # 300
+        """
+        assert isinstance(boardLike, np.ndarray) and boardLike.shape[:2] == (self.n, self.n)
+        assert isinstance(kth, int)
+        
+        r, q = np.indices((self.n, self.n))
+        s = (r + q) % self.n
+        orderOfSymmetry = 6  # range(0, 360, 60)
+        kth = kth % orderOfSymmetry
+        for i in range(kth + 1):
+            r, q, s = (-q) % self.n, s, r
+        return boardLike[r, q].copy()
 
     def stringRepresentation(self, board):
         return board.tostring()

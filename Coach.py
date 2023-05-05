@@ -66,7 +66,7 @@ class Coach:
 
             # get action probabilities from the perspective of current player
             pi = mcts.getActionProb(game, temp=temp)
-            sym = game.getSymmetries(game.getCanonicalBoard(), pi)
+            sym = game.getSymmetries(game.toNNetInput(), pi)
             for b, p in sym:
                 trainExamples.append([b, p, game.player])
 
@@ -100,7 +100,7 @@ class Coach:
                 # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
                 #     mcts = MCTS(self.nnet, self.args)  # reset search tree
                 #     game = self.game.reset()  # reset game
-                #     iterationTrainExamples += self.executeEpisode(game, mcts)
+                #     iterationTrainExamples += self.executeEpisode((game, mcts))
 
                 # os.makedirs(self.args.sharedPath, exist_ok=True)
                 # with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
