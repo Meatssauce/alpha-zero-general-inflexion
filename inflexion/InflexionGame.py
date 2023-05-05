@@ -75,10 +75,10 @@ class InflexionGame(Game):
         opponentPieces = (self.board == self.player.opponent.num).astype(np.int8)
         totalMoves = np.ones(self.getBoardSize(), dtype=np.int8) * self.currTurn
         
-        return np.stack([playerPieces, opponentPieces, totalMoves], axis=2)
+        return np.stack([playerPieces, opponentPieces, totalMoves], axis=0)
     
     def nnetInputShape(self):
-        return self.n, self.n, 3
+        return 3, self.n, self.n
         
     def getBoardSize(self) -> tuple:
         return self.n, self.n
@@ -104,9 +104,10 @@ class InflexionGame(Game):
         return self.gameStatus
 
     def getSymmetries(self, board: np.ndarray, pi: np.ndarray) -> list[tuple[np.ndarray, list]]:
-        assert isinstance(board, np.ndarray) and board.shape == (self.n, self.n)
+        assert isinstance(board, np.ndarray) and board.shape[-2:] == (self.n, self.n)
         assert isinstance(pi, np.ndarray) and pi.size == self.actionSize
 
+        board = np.transpose(board, (1, 2, 0))
         pi = np.reshape(pi, self.policyShape)
 
         symmetricBoards = self.rotationalSymmetries(board)
@@ -121,7 +122,7 @@ class InflexionGame(Game):
             translations += self.translations(image)
         symmetricPis += translations
 
-        return [(board_, pi_.ravel().tolist()) for board_, pi_ in zip(symmetricBoards, symmetricPis)]
+        return [(np.transpose(board, (2, 0, 1)), pi_.ravel().tolist()) for board_, pi_ in zip(symmetricBoards, symmetricPis)]
     
     def getSymmetry(self, boardLike: np.ndarray, numRotations: int, numTranslations: int) -> np.ndarray:
         assert isinstance(boardLike, np.ndarray) and boardLike.shape == (self.n, self.n)
@@ -137,7 +138,6 @@ class InflexionGame(Game):
             a list of all translations of the board
         """
         assert isinstance(boardLike, np.ndarray) and boardLike.shape[:2] == (self.n, self.n)
-        assert isinstance(kth, int)
         
         translatedBoards = []
         for i in range(1, self.n):
