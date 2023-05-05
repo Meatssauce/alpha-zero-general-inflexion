@@ -51,7 +51,6 @@ def executeEpisode(items):
         action = np.random.choice(len(pi), p=pi)
         game, curPlayer = game.getNextState(action)
 
-        game.player = curPlayer
         result = game.getGameEnded()
 
         if result != GameStatus.ONGOING:

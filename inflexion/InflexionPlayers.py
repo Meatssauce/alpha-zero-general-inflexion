@@ -66,8 +66,9 @@ class GreedyPlayer(Player):
         for a in range(game.getActionSize()):
             if valids[a] == 0:
                 continue
-            nextBoard, _ = game.getNextState(a)
-            score = nextBoard.getScore()
+            nextBoard, opponent = game.getNextState(a)
+            nextBoard.player = opponent.opponent  # switch player back to self
+            score = nextBoard.score()
             candidates.append((score, a))
         candidates.sort(reverse=True)
         return candidates[0][1]

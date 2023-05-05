@@ -41,13 +41,6 @@ class Game:
         """
         raise NotImplementedError
 
-    def getCanonicalBoard(self) -> np.ndarray:
-        """
-        Returns:
-            canonicalBoard: a copy of the board in the canonical form of the current player used as nn input
-        """
-        raise NotImplementedError
-
     def getBoardSize(self) -> tuple:
         """
         Returns:
@@ -64,6 +57,9 @@ class Game:
 
     def getNextState(self, action: int) -> tuple['Game', PlayerColour]:
         """Take an action, applies it to the current board and returns the next board and player.
+
+        Following applying action, GameStatus and current turn are updated, and the current player is switched to the
+        opponent.
 
         Input:
             action: action taken by current player
@@ -106,14 +102,16 @@ class Game:
         """
         raise NotImplementedError
 
-    def stringRepresentation(self, board):
-        """
+    def randomSymmetry(self, boardLike: np.ndarray) -> np.ndarray:
+        """Get a random symmetric form of the board.
+
+        Call this function prior to inference in mcts to average out bias
+
         Input:
-            board: current board
+            boardLike: one or more planes with the same last 2 dimensions as the board
 
         Returns:
-            boardString: a quick conversion of board to a string format.
-                         Required by MCTS for hashing.
+            symmBoard: a symmetrical form of the board
         """
         raise NotImplementedError
 
@@ -148,4 +146,14 @@ class Game:
 
     def display(self):
         """Displays the current board."""
+        raise NotImplementedError
+
+    def toNNetInput(self):
+        """Converts the current board to the input of the neural network.
+
+        Returns:
+            boardStack: a stack of (M + L) x N1 x N2 board-like planes representing various features of the board
+                        where N1, N2 are the board's dimensions, M is the number of features and L is the number of
+                        constant valued planes representing the state of hidden variables and special rules
+        """
         raise NotImplementedError

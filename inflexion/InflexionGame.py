@@ -34,7 +34,7 @@ class InflexionGame(Game):
 
         @classmethod
         def allSpreads(cls) -> tuple['InflexionGame.Move', ...]:
-            return cls.SPREAD_R1, cls.SPREAD_R2, cls.SPREAD_Q1, cls.SPREAD_Q2, cls.SPREAD_P1, cls.SPREAD_P2
+            return tuple(move for move in cls if move != cls.SPAWN)
 
     def __init__(self, n: int,
                  firstMover: PlayerColour = PlayerColour.RED,
@@ -64,19 +64,21 @@ class InflexionGame(Game):
         self.maxActionsPerCell = 6 + 1
         self.actionSize = self.maxActionsPerCell * self.n ** 2
         self.policyShape = self.maxActionsPerCell, self.n, self.n
-        self.boardStackShape = 3, self.n, self.n
+        self.boardStackShape = 4, self.n, self.n
+        self.maxPowerAtSpawn = 48
         # self.movesHistory = []
 
     def reset(self) -> 'InflexionGame':
         return InflexionGame(self.n, firstMover=self.firstMover, maxTurns=self.maxTurns, maxPower=self.maxPower)
 
     def toNNetInput(self) -> np.ndarray:
-        # return self.player.num * self.board
+        # return (self.player.num * self.board).reshape(self.boardStackShape)
         playerPieces = (self.player.owns(self.board)).astype(np.int8)
         opponentPieces = (self.player.opponent.owns(self.board)).astype(np.int8)
         totalMoves = np.ones(self.getBoardSize(), dtype=np.int8) * self.currTurn
-        
-        return np.stack([playerPieces, opponentPieces, totalMoves], axis=0)
+        canSpawn = np.tile(self.totalPower() <= self.maxPowerAtSpawn, self.getBoardSize()).astype(np.int8)
+
+        return np.stack([playerPieces, opponentPieces, totalMoves, canSpawn], axis=0)
 
     def isValidAction(self, action):
         move = self.actionToMove(action)
@@ -105,12 +107,16 @@ class InflexionGame(Game):
         nextGame = deepcopy(self)
         nextGame.executeMove(move)
         assert nextGame.currTurn == self.currTurn + 1
+        assert nextGame.player != self.player
         return nextGame, self.player.opponent
 
     def getValidMoves(self) -> np.ndarray:
-        valids = np.zeros(self.policyShape)
-        legalMoves = np.array(self.getLegalMoves(self.player))
-        valids[tuple(legalMoves.T)] = 1
+        valids = np.repeat(self.player.owns(self.board)[np.newaxis, ...], len(InflexionGame.Move), axis=0)
+        if self.totalPower() <= self.maxPowerAtSpawn:
+            valids[InflexionGame.Move.SPAWN.num, :] = self.board == 0
+        else:
+            valids[InflexionGame.Move.SPAWN.num, :] = False
+        valids = valids.astype(np.int8)
         return valids.ravel()
 
     def getGameEnded(self) -> GameStatus:
@@ -140,7 +146,7 @@ class InflexionGame(Game):
 
     def rotate(self, boardLike: np.ndarray, k: int = 1) -> np.ndarray:
         """
-        Returns all rotational symmetries of the board.
+        Returns a board rotated by 60 * k degrees
         Args:
             boardLike: the board to be rotated
             k: the number of 60 degree rotations to perform
@@ -185,13 +191,15 @@ class InflexionGame(Game):
         return boardLike[:, r, q].copy()
 
     def translate(self, boardLike: np.ndarray, shift: int, axis: str) -> np.ndarray:
-        """Returns all translations of the board along the r, q, and s axes.
+        """Returns a board translated by shift cells along axis
 
         Args:
             boardLike: the numpy array of shape (n, n, ...) to be translated
+            shift: the number cells by which to shift the board
+            axis: the axis along which to shift the board
 
         Returns:
-            a list of all translations of the board
+            the translated boardLike array
         """
         assert (isinstance(boardLike, np.ndarray) and len(boardLike.shape) == len(self.boardStackShape)
                 and boardLike.shape[-2:] == self.getBoardSize())
@@ -210,26 +218,19 @@ class InflexionGame(Game):
                 return np.roll(np.roll(boardLike, shift, axis=2), -shift, axis=1)
         raise ValueError("not supposed to reach here")
 
-    def stringRepresentation(self, board):
-        return board.tostring()
-
     def getScore(self) -> int:
         return self.countQuantityDiff(self.player)
 
     def moveToAction(self, move: tuple | list) -> int:
-        r, q, moveType = move
+        moveType, r, q = move
         assert 0 <= r < self.n and 0 <= q < self.n and moveType in InflexionGame.Move
-        return r * self.n * self.maxActionsPerCell + q * self.maxActionsPerCell + moveType.num
+        return int(np.ravel_multi_index(([moveType.num], [r], [q]), self.policyShape))
 
     def actionToMove(self, action: int) -> tuple[int, int, Move]:
         assert 0 <= action < self.actionSize
-        maxActionsPerRow = self.n * self.maxActionsPerCell
-        ActionIdxInRow = action % maxActionsPerRow
-        q = ActionIdxInRow // self.maxActionsPerCell
-        moveType = ActionIdxInRow % self.maxActionsPerCell
-        moveType = InflexionGame.Move.fromNum(moveType)
-        r = action // maxActionsPerRow
-        return r, q, moveType
+        moveNum, r, q = np.unravel_index(action, self.policyShape)
+        moveType = InflexionGame.Move.fromNum(moveNum)
+        return moveType, r, q
 
     def display(self, ansi=False):
         """
@@ -294,10 +295,10 @@ class InflexionGame(Game):
 
     def executeMove(self, move: tuple):
         """Execute a move on the board and update the game state."""
-        r, q, moveType = move
+        moveType, r, q = move
         assert 0 <= r < self.n and 0 <= q < self.n and moveType in InflexionGame.Move
 
-        if moveType == InflexionGame.Move.SPAWN:  # SPAWN
+        if moveType == InflexionGame.Move.SPAWN and self.totalPower() <= self.maxPowerAtSpawn:  # SPAWN
             assert self.board[r, q] == 0
             self.board[r, q] = self.player.num
         elif moveType in InflexionGame.Move.allSpreads():  # SPREAD
@@ -312,12 +313,9 @@ class InflexionGame(Game):
         else:
             raise ValueError("Invalid move")
 
-        self.currTurn += 1
-        # self.movesHistory.append((self.player, move))
-
         # Update game status
-        if moveType in InflexionGame.Move.allSpreads() and \
-                self.board[self.player.opponent.owns(self.board)].size == 0:
+        if (moveType in InflexionGame.Move.allSpreads() and
+                self.board[self.player.opponent.owns(self.board)].size == 0):
             self.gameStatus = GameStatus.WON
         elif self.currTurn >= self.maxTurns:
             diff = self.countPowerDiff(self.player)
@@ -330,31 +328,16 @@ class InflexionGame(Game):
         elif (self.board == 0).all():
             self.gameStatus = GameStatus.DRAW
 
+        self.currTurn += 1
+        # self.movesHistory.append((self.player, move))
+        self.player = self.player.opponent
+
     def countPowerDiff(self, player: PlayerColour) -> int:
         """Count the total power difference for the given player"""
         assert player in PlayerColour
         total = self.board.sum()
         adjusted = player.num * total
         return adjusted
-
-    def getLegalMoves(self, player: PlayerColour) -> list[tuple[int, int, int]]:
-        """Return all legal moves for the player"""
-        assert player in PlayerColour
-        moves = []
-        for r, q in product(range(self.n), range(self.n)):
-            new_moves = self.getMovesForCell((r, q), player)
-            moves += new_moves
-        return moves
-
-    def getMovesForCell(self, cell: tuple[int, int], player: PlayerColour) -> list[tuple[int, int, int]]:
-        assert player in PlayerColour
-        assert len(cell) == 2 and all(isinstance(x, int) for x in cell)
-        r, q = cell
-        if self.board[r, q] == 0:
-            return [(r, q, InflexionGame.Move.SPAWN.num)]  # r, q, spawn=0|spread1--6
-        if player.owns(self.board[r, q]):
-            return [(r, q, move.num) for move in InflexionGame.Move.allSpreads()]
-        return []
 
     def countQuantityDiff(self, player: PlayerColour) -> int:
         """Count the # pieces difference for the given player"""
@@ -383,3 +366,6 @@ class InflexionGame(Game):
         if color == PlayerColour.BLUE.token:
             color_code = "\033[34m"
         return f"{bold_code}{color_code}{str}\033[0m"
+
+    def totalPower(self):
+        return np.sum(np.abs(self.board))

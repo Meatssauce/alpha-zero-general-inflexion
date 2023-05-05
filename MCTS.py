@@ -88,15 +88,10 @@ class MCTS:
 
         if s not in self.Ps:
             # leaf node
-            temp = game.board.copy()
             input_ = game.toNNetInput()
             input_ = game.randomSymmetry(input_)
             policies, v = self.nnet.predict(input_)
-            assert (game.board == temp).all()
             valids = game.getValidMoves()
-            # for i in range(game.getActionSize()):
-            #     valid = game.isValidAction(i)
-            #     assert (not valids[i] and not valid) or (valids[i] and valid)
             policies *= valids  # masking invalid moves
             sum_Ps_s = policies.sum()
 
@@ -135,7 +130,6 @@ class MCTS:
 
         a = best_act
         next_s, next_player = game.getNextState(a)
-        next_s.player = next_player
 
         v = self.search(next_s)
 
