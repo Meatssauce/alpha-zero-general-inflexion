@@ -141,3 +141,6 @@ class MCTS:
 
         self.Ns[s] += 1
         return -v
+
+    def reset(self):
+        return MCTS(self.nnet, self.args)

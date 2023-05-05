@@ -34,13 +34,6 @@ class Game:
         self._player = player
         self.gameStatus = self.gameStatus.opposite()
 
-    def clone(self) -> 'Game':
-        """
-        Returns:
-            game: a deep copy of the current game
-        """
-        raise NotImplementedError
-
     def reset(self) -> 'Game':
         """
         Returns:

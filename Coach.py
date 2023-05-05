@@ -85,6 +85,7 @@ class Coach:
         only if it wins >= updateThreshold fraction of games.
         """
 
+        pitInterval = 1
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
             log.info(f'Starting Iter #{i} ...')
@@ -130,12 +131,15 @@ class Coach:
             # training new network, keeping a copy of the old one
             self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            pmcts = MCTS(self.pnet, self.args)
 
             self.nnet.train(trainExamples)
-            nmcts = MCTS(self.nnet, self.args)
+
+            if i % pitInterval != 0:
+                continue
 
             log.info('PITTING AGAINST PREVIOUS VERSION')
+            pmcts = MCTS(self.pnet, self.args)
+            nmcts = MCTS(self.nnet, self.args)
             player1 = MCTSPlayer(pmcts)
             player2 = MCTSPlayer(nmcts)
             arena = Arena(player1, player2, self.game.reset())

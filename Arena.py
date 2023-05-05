@@ -1,7 +1,9 @@
 import logging
 from collections import Counter
+from copy import deepcopy
 from itertools import cycle
 from multiprocessing import Pool
+from time import sleep
 
 from tqdm import tqdm
 
@@ -28,11 +30,10 @@ class Arena:
         see othello/OthelloPlayers.py for an example. See pit.py for pitting
         human players/other baselines with each other.
         """
-        self.player1 = player1
-        self.player2 = player2
+        self.player = {PlayerColour.RED: player1, PlayerColour.BLUE: player2}
         self.game = game
 
-    def playGame(self, player1: Player, player2: Player, verbose=False):
+    def playGame(self, player1: PlayerColour, player2: PlayerColour, verbose=False):
         """
         Executes one episode of a game.
 
@@ -42,11 +43,13 @@ class Arena:
             or
                 draw result returned from the game that is neither 1, -1, nor 0.
         """
-        assert isinstance(player1, Player) and isinstance(player2, Player)
+        assert isinstance(player1, PlayerColour) and isinstance(player2, PlayerColour)
 
-        player = cycle([player1, player2])
-        game = self.game
+        game = self.game.reset()
+        game.player = player1
         assert game.currTurn == 0
+        player = cycle([self.player[player1].reset(), self.player[player2].reset()])
+
         it = 0
         while game.getGameEnded() == GameStatus.ONGOING:
             it += 1
@@ -65,11 +68,23 @@ class Arena:
             game.player = curPlayer
 
         # Results from red's perspective
-        game.player = game.firstMover
+        game.player = player1
         if verbose:
             print("Game over: Turn ", str(it), "Result ", str(game.getGameEnded().name))
             game.display()
-        return game.getGameEnded()
+
+        wins = Counter()
+        draws = 0
+        match game.getGameEnded():
+            case GameStatus.WON:
+                wins[game.player] += 1
+            case GameStatus.LOST:
+                wins[game.player.opponent] += 1
+            case GameStatus.DRAW:
+                draws += 1
+            case _:
+                raise ValueError(f'Unexpected game status: {game.getGameEnded()}')
+        return wins, draws
 
     def playGames(self, num: int, verbose=False):
         """
@@ -83,52 +98,48 @@ class Arena:
         """
         assert isinstance(num, int) and num >= 2
 
-        wins = {self.player1: 0, self.player2: 0}
-        draws = 0
+        # wins = {self.player1: 0, self.player2: 0}
+        # draws = 0
+        #
+        # for i, (player1, player2) in enumerate([(self.player1, self.player2), (self.player2, self.player1)]):
+        #     for _ in tqdm(range(num // 2), desc=f"Arena.playGames ({i})"):
+        #         gameResult = self.playGame(player1=player1, player2=player2, verbose=verbose)
+        #         match gameResult:
+        #             case GameStatus.DRAW:
+        #                 draws += 1
+        #             case GameStatus.WON:
+        #                 wins[player1] += 1
+        #             case GameStatus.LOST:
+        #                 wins[player2] += 1
+        #             case _:
+        #                 raise ValueError(f'Unexpected game status: {gameResult}')
+        #
+        # return wins[self.player1], wins[self.player2], draws
 
-        for i, (player1, player2) in enumerate([(self.player1, self.player2), (self.player2, self.player1)]):
-            for _ in tqdm(range(num // 2), desc=f"Arena.playGames ({i})"):
-                gameResult = self.playGame(player1=player1, player2=player2, verbose=verbose)
-                match gameResult:
-                    case GameStatus.DRAW:
-                        draws += 1
-                    case GameStatus.WON:
-                        wins[player1] += 1
-                    case GameStatus.LOST:
-                        wins[player2] += 1
-                    case _:
-                        raise ValueError(f'Unexpected game status: {gameResult}')
+        totalWins = Counter()
+        totalDraws = 0
+        subtotal = num // 2
+        player1, player2 = list(PlayerColour)
 
-        return wins[self.player1], wins[self.player2], draws
+        with Pool() as p:
+            args = ((player1, player2, verbose)
+                    if i <= subtotal else
+                    (player2, player1, verbose)
+                    for i in range(num))
 
-    #     totalWins = Counter()
-    #     totalDraws = 0
-    #     total = num // 2
-    #
-    #     with Pool() as p:
-    #         for i, (player1, player2) in enumerate([(self.player1, self.player2), (self.player2, self.player1)]):
-    #             args = ((player1, player2, verbose) for _ in range(total))
-    #
-    #             with tqdm(total=total, desc=f"Arena.playGames ({i})") as pbar:
-    #                 for wins, draws in p.imap_unordered(self.getGameResults, args):
-    #                     totalWins += wins
-    #                     totalDraws += draws
-    #                     pbar.update()
-    #
-    #     return totalWins[hash(self.player1)], totalWins[hash(self.player2)], totalDraws
-    #
-    # def getGameResults(self, args):
-    #     player1, player2, verbose = args
-    #     wins = Counter()
-    #     draws = 0
-    #     gameResult = self.playGame(player1=player1, player2=player2, verbose=verbose)
-    #     match gameResult:
-    #         case GameStatus.DRAW:
-    #             draws += 1
-    #         case GameStatus.WON:
-    #             wins[hash(player1)] += 1
-    #         case GameStatus.LOST:
-    #             wins[hash(player2)] += 1
-    #         case _:
-    #             raise ValueError(f'Unexpected game status: {gameResult}')
-    #     return wins, draws
+            with tqdm(total=subtotal, desc=f"Arena.playGames (0)") as pbar, \
+                    tqdm(total=subtotal, desc=f"Arena.playGames (1)") as pbar2:
+                for player, (wins, draws) in p.imap_unordered(self.getGameResults, args):
+                    totalWins += wins
+                    totalDraws += draws
+                    if player == PlayerColour.RED:
+                        pbar.update()
+                    else:
+                        pbar2.update()
+                sleep(5)
+
+        return totalWins[player1], totalWins[player2], totalDraws
+
+    def getGameResults(self, args):
+        player1, player2, verbose = args
+        return player1, self.playGame(player1=player1, player2=player2, verbose=verbose)
