@@ -68,7 +68,7 @@ class GreedyPlayer(Player):
                 continue
             nextBoard, opponent = game.getNextState(a)
             nextBoard.player = opponent.opponent  # switch player back to self
-            score = nextBoard.score()
+            score = nextBoard.getScore()
             candidates.append((score, a))
         candidates.sort(reverse=True)
         return candidates[0][1]

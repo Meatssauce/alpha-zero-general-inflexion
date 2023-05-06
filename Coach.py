@@ -56,6 +56,8 @@ class Coach:
         """
         game, mcts = args
         assert isinstance(game, Game) and isinstance(mcts, MCTS)
+        assert game.currTurn == 0 and game.getGameEnded() == GameStatus.ONGOING
+
         policyPlanes = []
         boardStacks = []
         players = []
@@ -106,10 +108,10 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
-                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                    mcts = MCTS(self.nnet, self.args)  # reset search tree
-                    game = self.game.reset()  # reset game
-                    iterationTrainExamples += self.executeEpisode((game, mcts))
+                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
+                #     mcts = MCTS(self.nnet, self.args)  # reset search tree
+                #     game = self.game.reset()  # reset game
+                #     iterationTrainExamples += self.executeEpisode((game, mcts))
 
                 # os.makedirs(self.args.sharedPath, exist_ok=True)
                 # with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
@@ -123,12 +125,12 @@ class Coach:
                 # with open(os.path.join(self.args.sharedPath, 'iterationTrainExamples'), "rb") as f:
                 #     iterationTrainExamples += Unpickler(f).load()
                 
-                # with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
-                #     items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
-                #     for results in p.imap_unordered(self.executeEpisode, items):
-                #         iterationTrainExamples += results
-                #         pbar.update()
-                #     sleep(3)
+                with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
+                    items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
+                    for results in p.imap_unordered(self.executeEpisode, items):
+                        iterationTrainExamples += results
+                        pbar.update()
+                    sleep(3)
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -162,7 +164,6 @@ class Coach:
             player2 = RandomPlayer()
             arena = Arena(player1, player2, self.game.reset())
             p1wins, p2wins, draws = arena.playGames(self.args.arenaCompare)
-
             log.info('NEW/RANDOM WINS : %d / %d ; DRAWS : %d' % (p1wins, p2wins, draws))
 
             player2 = GreedyPlayer()
