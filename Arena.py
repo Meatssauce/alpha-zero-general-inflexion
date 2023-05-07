@@ -8,7 +8,7 @@ from time import sleep
 
 from tqdm import tqdm
 
-from flags import PlayerColour, GameStatus
+from flags import PlayerColour, GameOutcome
 from inflexion.InflexionPlayers import Player
 
 log = logging.getLogger(__name__)
@@ -47,45 +47,44 @@ class Arena:
         """
         assert isinstance(player1, PlayerColour) and isinstance(player2, PlayerColour)
 
-        game = self.game.reset()
+        game = self.game.restarted()
         game.player = player1
-        assert game.currTurn == 0
+        assert game._curr_turn == 0
         player = cycle([self.player[player1].reset(), self.player[player2].reset()])
 
         it = 0
-        while game.getGameEnded() == GameStatus.ONGOING:
+        while game.outcome == GameOutcome.ONGOING:
             it += 1
             if verbose:
                 print("Turn ", str(it), "Player ", str(game.player.name))
-                game.display()
+                game.render()
             action = next(player).play(game)
 
-            valids = game.getValidMoves()
+            valids = game.valid_actions_mask()
 
             if valids[action] == 0:
                 log.error(f'Action {action} is not valid!')
                 log.debug(f'valids = {valids}')
                 assert valids[action] > 0
-            game, curPlayer = game.getNextState(action)
-            game.player = curPlayer
+            game = game.to_next_state(action)
 
         # Results from red's perspective
         game.player = player1
         if verbose:
-            print("Game over: Turn ", str(it), "Result ", str(game.getGameEnded().name))
-            game.display()
+            print("Game over: Turn ", str(it), "Result ", str(game.outcome.name))
+            game.render()
 
         wins = Counter()
         draws = 0
-        match game.getGameEnded():
-            case GameStatus.WON:
+        match game.outcome:
+            case GameOutcome.WON:
                 wins[game.player] += 1
-            case GameStatus.LOST:
+            case GameOutcome.LOST:
                 wins[game.player.opponent] += 1
-            case GameStatus.DRAW:
+            case GameOutcome.DRAW:
                 draws += 1
             case _:
-                raise ValueError(f'Unexpected game status: {game.getGameEnded()}')
+                raise ValueError(f'Unexpected game status: {game.outcome}')
         return wins, draws
 
     def playGames(self, num: int, verbose=False):

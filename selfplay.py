@@ -10,7 +10,7 @@ import torch
 
 from Game import Game
 from MCTS import MCTS
-from flags import GameStatus
+from flags import GameOutcome
 from inflexion.pytorch.NNet import NNetWrapper
 
 log = logging.getLogger(__name__)
@@ -46,10 +46,10 @@ def executeEpisode(items):
 
         # get action probabilities from the perspective of current player
         pi = mcts.getActionProb(game, temp=temp)
-        assert isinstance(pi, np.ndarray) and pi.size == game.getActionSize()
+        assert isinstance(pi, np.ndarray) and pi.size == game.max_actions
 
         policyPlane = pi.reshape(game.policyShape)
-        boardStack = game.toNNetInput()
+        boardStack = game.to_planes()
 
         policyPlanes += game.symmetries(policyPlane)
         boardStacks += game.symmetries(boardStack)
@@ -57,14 +57,14 @@ def executeEpisode(items):
 
         # assert (game.board == temp1).all()
         action = np.random.choice(len(pi), p=pi)
-        game, curPlayer = game.getNextState(action)
+        game = game.to_next_state(action)
 
-        result = game.getGameEnded()
+        result = game.outcome
 
-        if result == GameStatus.ONGOING:
+        if result == GameOutcome.ONGOING:
             continue
 
-        return [(board, policy.ravel().tolist(), result.value if player == curPlayer else -result.value)
+        return [(board, policy.ravel().tolist(), result.value if player == game.player else -result.value)
                 for board, policy, player in zip(boardStacks, policyPlanes, players)]
 
 

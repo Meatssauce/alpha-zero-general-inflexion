@@ -27,8 +27,8 @@ args = dotdict({
 class NNetWrapper(NeuralNet):
     def __init__(self, game):
         self.nnet = innet(game, args)
-        self.depth, self.board_x, self.board_y = game.nnetInputShape()
-        self.action_size = game.getActionSize()
+        self.depth, self.board_x, self.board_y = game.to_planes().shape
+        self.action_size = game.max_actions
 
         if args.cuda:
             self.nnet.cuda()

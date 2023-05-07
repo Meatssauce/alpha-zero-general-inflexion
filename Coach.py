@@ -14,7 +14,7 @@ from tqdm import tqdm
 from Arena import Arena
 from Game import Game
 from MCTS import MCTS
-from flags import PlayerColour, GameStatus
+from flags import PlayerColour, GameOutcome
 from inflexion.InflexionPlayers import MCTSPlayer, RandomPlayer, GreedyPlayer
 from inflexion.pytorch.NNet import NNetWrapper
 
@@ -56,7 +56,7 @@ class Coach:
         """
         game, mcts = args
         assert isinstance(game, Game) and isinstance(mcts, MCTS)
-        assert game.currTurn == 0 and game.getGameEnded() == GameStatus.ONGOING
+        assert game._curr_turn == 0 and game.outcome == GameOutcome.ONGOING
 
         policyPlanes = []
         boardStacks = []
@@ -68,27 +68,25 @@ class Coach:
             temp = int(episodeStep < self.args.tempThreshold)
 
             # Get action probabilities from the perspective of current player
-            # temp1 = game.board.copy()
             pi = mcts.getActionProb(game, temp=temp)
-            assert isinstance(pi, np.ndarray) and pi.size == game.getActionSize()
+            assert isinstance(pi, np.ndarray) and pi.size == game.max_actions
 
-            policyPlane = pi.reshape(game.policyShape)
-            boardStack = game.toNNetInput()
+            policyPlane = pi.reshape(game.policy_shape)
+            boardStack = game.to_planes()
 
             policyPlanes += game.symmetries(policyPlane)
             boardStacks += game.symmetries(boardStack)
             players += [game.player] * len(policyPlanes)
 
-            # assert (game.board == temp1).all()
             action = np.random.choice(len(pi), p=pi)
-            game, curPlayer = game.getNextState(action)
+            game = game.to_next_state(action)
 
-            result = game.getGameEnded()
+            result = game.outcome
 
-            if result == GameStatus.ONGOING:
+            if result == GameOutcome.ONGOING:
                 continue
 
-            return [(board, policy.ravel().tolist(), result.value if player == curPlayer else -result.value)
+            return [(board, policy.ravel().tolist(), result.value if player == game.player else -result.value)
                     for board, policy, player in zip(boardStacks, policyPlanes, players)]
 
     def learn(self):
@@ -108,10 +106,10 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
-                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                #     mcts = MCTS(self.nnet, self.args)  # reset search tree
-                #     game = self.game.reset()  # reset game
-                #     iterationTrainExamples += self.executeEpisode((game, mcts))
+                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
+                    mcts = MCTS(self.nnet, self.args)  # reset search tree
+                    game = self.game.restarted()  # reset game
+                    iterationTrainExamples += self.executeEpisode((game, mcts))
 
                 # os.makedirs(self.args.sharedPath, exist_ok=True)
                 # with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
@@ -125,12 +123,12 @@ class Coach:
                 # with open(os.path.join(self.args.sharedPath, 'iterationTrainExamples'), "rb") as f:
                 #     iterationTrainExamples += Unpickler(f).load()
                 
-                with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
-                    items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
-                    for results in p.imap_unordered(self.executeEpisode, items):
-                        iterationTrainExamples += results
-                        pbar.update()
-                    sleep(3)
+                # with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
+                #     items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
+                #     for results in p.imap_unordered(self.executeEpisode, items):
+                #         iterationTrainExamples += results
+                #         pbar.update()
+                #     sleep(3)
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -161,15 +159,10 @@ class Coach:
             nmcts = MCTS(self.nnet, self.args)
             player1 = MCTSPlayer(nmcts)
 
-            player2 = RandomPlayer()
-            arena = Arena(player1, player2, self.game.reset())
-            p1wins, p2wins, draws = arena.playGames(self.args.arenaCompare)
-            log.info('NEW/RANDOM WINS : %d / %d ; DRAWS : %d' % (p1wins, p2wins, draws))
-
-            player2 = GreedyPlayer()
-            arena = Arena(player1, player2, self.game.reset())
-            p1wins, p2wins, draws = arena.playGames(self.args.arenaCompare)
-            log.info('NEW/GREEDY WINS : %d / %d ; DRAWS : %d' % (p1wins, p2wins, draws))
+            for player2 in [RandomPlayer(), GreedyPlayer()]:
+                arena = Arena(player1, player2, self.game.restarted())
+                p1wins, p2wins, draws = arena.playGames(self.args.arenaCompare)
+                log.info(f'NEW/{player2.__class__.__name__} WINS : %d / %d ; DRAWS : %d' % (p1wins, p2wins, draws))
 
     def getCheckpointFile(self, iteration):
         return 'checkpoint_' + str(iteration) + '.pth.tar'

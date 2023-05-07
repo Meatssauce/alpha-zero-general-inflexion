@@ -38,8 +38,8 @@ def getPlayer(kind: str, game: Game, folder: str = None, filename: str = None):
 
 
 def main():
-    game = InflexionGame(7, maxTurns=343, maxPower=6)
-    player1 = getPlayer("mcts", game, filename='best5.pth.tar')
+    game = InflexionGame(7, max_turns=343, max_power=6)
+    player1 = getPlayer("mcts", game, filename='best6.pth.tar')
     # player2 = getPlayer("mcts", game, filename='best3.pth.tar')
     player2 = RandomPlayer()
     arena = Arena.Arena(player1, player2, game)

@@ -11,8 +11,8 @@ import torch.optim as optim
 class InflexionNNet(nn.Module):
     def __init__(self, game, args):
         # game params
-        self.depth, self.board_x, self.board_y = game.nnetInputShape()
-        self.action_size = game.getActionSize()
+        self.depth, self.board_x, self.board_y = game.to_planes().shape
+        self.action_size = game.max_actions
         self.args = args
 
         super(InflexionNNet, self).__init__()

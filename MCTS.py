@@ -5,7 +5,7 @@ from itertools import product
 import numpy as np
 
 from Game import Game
-from flags import GameStatus
+from flags import GameOutcome
 from inflexion.pytorch.NNet import NNetWrapper
 
 EPS = 1e-8
@@ -45,8 +45,8 @@ class MCTS:
         for i in range(self.args.numMCTSSims):
             self.search(game)
 
-        s = game.toNNetInput().tobytes()
-        counts = np.array([self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(game.getActionSize())])
+        s = game.to_planes().tobytes()
+        counts = np.array([self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(game.max_actions)])
 
         if temp == 0:
             bestAs = np.argwhere(counts == np.max(counts)).ravel()
@@ -80,18 +80,18 @@ class MCTS:
         """
         assert isinstance(game, Game)
 
-        s = game.toNNetInput().tobytes()
+        s = game.to_planes().tobytes()
 
-        if (gameStatus := game.getGameEnded()) != GameStatus.ONGOING:
+        if (gameStatus := game.outcome) != GameOutcome.ONGOING:
             # terminal node
             return -gameStatus.value
 
         if s not in self.Ps:
             # leaf node
-            input_ = game.toNNetInput()
-            input_ = game.randomSymmetry(input_)
+            input_ = game.to_planes()
+            input_ = game.random_symmetry(input_)
             policies, v = self.nnet.predict(input_)
-            valids = game.getValidMoves()
+            valids = game.valid_actions_mask()
             policies *= valids  # masking invalid moves
             sum_Ps_s = policies.sum()
 
@@ -116,7 +116,7 @@ class MCTS:
         best_act = -1
 
         # pick the action with the highest upper confidence bound
-        for a in range(game.getActionSize()):
+        for a in range(game.max_actions):
             if valids[a]:
                 if (s, a) in self.Qsa:
                     u = self.Qsa[(s, a)] + self.args.cpuct * self.Ps[s][a] * math.sqrt(self.Ns[s]) / (
@@ -129,7 +129,7 @@ class MCTS:
                     best_act = a
 
         a = best_act
-        next_s, next_player = game.getNextState(a)
+        next_s = game.to_next_state(a)
 
         v = self.search(next_s)
 

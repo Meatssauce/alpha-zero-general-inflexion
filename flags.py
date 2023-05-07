@@ -29,7 +29,7 @@ class PlayerColour(Enum):
         return piece * self.num > 0
 
 
-class GameStatus(Enum):
+class GameOutcome(Enum):
     ONGOING = 0
     DRAW = 1e-4  # draw has some value
     WON = 1

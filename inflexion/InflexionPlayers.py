@@ -4,7 +4,7 @@ import numpy as np
 
 from Game import Game
 from MCTS import MCTS
-from inflexion.InflexionGame import InflexionGame
+from inflexion.InflexionGame import InflexionGame, Move
 
 
 class Player:
@@ -24,8 +24,8 @@ class Player:
 class RandomPlayer(Player):
     def play(self, game: Game) -> int:
         assert isinstance(game, Game)
-        actions = np.arange(game.getActionSize())
-        valids = game.getValidMoves()
+        actions = np.arange(game.max_actions)
+        valids = game.valid_actions_mask()
         actions = actions[valids == 1]
         action = np.random.choice(actions)
         return int(action)
@@ -38,16 +38,16 @@ class HumanPlayer(Player):
     def play(self, game: Game) -> int:
         assert isinstance(game, Game)
         # display(board)
-        valid = game.getValidMoves()
+        valid = game.valid_actions_mask()
         while True:
             print("Enter move as 3 integer: r q m")
             print("where m is in ", end="")
-            print(" ".join([f"{move.name}: {move.num}" for move in InflexionGame.Move]))
+            print(" ".join([f"{move.name}: {move.num}" for move in Move]))
             input_move = input(">>>")
             r, q, m = [int(x) for x in input_move.split(' ')]
-            m = InflexionGame.Move.fromNum(m)
+            m = Move.from_num(m)
             try:
-                a = game.moveToAction((r, q, m))
+                a = game.move_to_action((m, r, q,))
                 if valid[a]:
                     break
             except ValueError:
@@ -61,14 +61,14 @@ class HumanPlayer(Player):
 class GreedyPlayer(Player):
     def play(self, game: Game) -> int:
         assert isinstance(game, Game)
-        valids = game.getValidMoves()
+        valids = game.valid_actions_mask()
         candidates = []
-        for a in range(game.getActionSize()):
+        for a in range(game.max_actions):
             if valids[a] == 0:
                 continue
-            nextBoard, opponent = game.getNextState(a)
-            nextBoard.player = opponent.opponent  # switch player back to self
-            score = nextBoard.getScore()
+            nextBoard = game.to_next_state(a)
+            nextBoard.player = nextBoard.player.opponent  # switch player back to self
+            score = nextBoard.score()
             candidates.append((score, a))
         candidates.sort(reverse=True)
         return candidates[0][1]

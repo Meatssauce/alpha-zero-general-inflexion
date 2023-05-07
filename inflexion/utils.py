@@ -64,8 +64,8 @@ def render_board(game: InflexionGame, ansi=False):
     assert isinstance(game, InflexionGame)
 
     board = {}
-    for r, q in product(range(game.board.shape[0]), range(game.board.shape[1])):
-        piece = game.board[r, q]
+    for r, q in product(range(game._board.shape[0]), range(game._board.shape[1])):
+        piece = game._board[r, q]
         if piece == 0:
             continue
         player = PlayerColour.from_piece(piece)
