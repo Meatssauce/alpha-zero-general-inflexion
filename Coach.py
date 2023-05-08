@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from collections import deque
+from pathlib import Path
 from pickle import Pickler, Unpickler
 from random import shuffle
 from torch.multiprocessing import Pool
@@ -148,21 +149,26 @@ class Coach:
                 trainExamples.extend(e)
             shuffle(trainExamples)
 
-            # training new network
-            self.nnet.train(trainExamples)
-            self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+            self.nnet.save_checkpoint(Path(self.args.save_dir) / "temp.pt")
+            self.pnet.load_checkpoint(Path(self.args.save_dir) / "temp.pt")
+            pmp = MCTSPlayer(MCTS(self.nnet, self.args))  # change input args
 
-            if i % pitInterval != 0:
-                continue
+            self.nnet.train(trainExamples)
+            self.nnet.save_checkpoint(Path(self.args.save_dir) / f"iter{i:05d}.pt")
+
+            nmp = MCTSPlayer(MCTS(self.nnet, self.args))
 
             log.info('PITTING AGAINST BASELINES')
-            nmcts = MCTS(self.nnet, self.args)
-            player1 = MCTSPlayer(nmcts)
+            arena = Arena(pmp, nmp, self.game.restarted())
+            pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
+            log.info(f'NEW/PREV WINS : %d / %d ; DRAWS : %d' % (pwins, pwins, draws))
 
-            for player2 in [RandomPlayer(), GreedyPlayer()]:
-                arena = Arena(player1, player2, self.game.restarted())
-                p1wins, p2wins, draws = arena.playGames(self.args.arenaCompare)
-                log.info(f'NEW/{player2.__class__.__name__} WINS : %d / %d ; DRAWS : %d' % (p1wins, p2wins, draws))
+            if pwins + nwins == 0 or nwins / (pwins + nwins) < self.args.updateThreshold:
+                print("rejected new model")
+                self.nnet.load_checkpoint(Path(self.args.save_dir) / "temp.pt")
+            else:
+                print("accepting new model")
+                self.nnet.save_checkpoint(Path(self.args.save_dir) / f"best.pt")
 
     def getCheckpointFile(self, iteration):
         return 'checkpoint_' + str(iteration) + '.pth.tar'

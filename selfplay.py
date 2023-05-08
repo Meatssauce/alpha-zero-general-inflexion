@@ -73,7 +73,7 @@ def main():
         game = Unpickler(f).load()
         args = Unpickler(g).load()
     nnet = NNetWrapper(game)
-    nnet.load_checkpoint(folder='./shared', filename='nnet.pth.bar')
+    nnet.load_checkpoint()
     mcts = MCTS(nnet, args)
 
     iterationTrainExamples = []

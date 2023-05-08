@@ -28,7 +28,7 @@ def getPlayer(kind: str, game: Game, folder: str = None, filename: str = None):
             player = GreedyPlayer()
         case "mcts":
             nn = NNet(game)
-            nn.load_checkpoint(folder=folder, filename=filename)
+            nn.load_checkpoint()
             args = dotdict({'numMCTSSims': 50, 'cpuct': 1.0})
             mcts = MCTS(nn, args)
             player = MCTSPlayer(mcts)

@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import coloredlogs
 
@@ -19,10 +20,12 @@ args = dotdict({
     'maxlenOfQueue': 200000,    # Number of game examples to train the neural networks.
     'numMCTSSims': 25,          # Number of games moves for MCTS to simulate.
     'arenaCompare': 40,         # Number of games to play during arena play to determine if new net will be accepted.
-    'cpuct': 1,
+    'cpuct': 3,
 
     'checkpoint': './temp/',
-    'load_model': True,
+    'save_dir': 'saved_models',
+    'saved_model_filename': 'best.pth.tar',
+    'load_model': False,
     'load_folder_file': ('./dev/models/inflexion/7x343x6', 'best5.pth.tar'),
     'numItersForTrainExamplesHistory': 20,
     'sharedPath': './shared'
@@ -37,8 +40,8 @@ def main():
     nnet = nn(g)
 
     if args.load_model:
-        log.info('Loading checkpoint "%s/%s"...', args.load_folder_file[0], args.load_folder_file[1])
-        nnet.load_checkpoint(args.load_folder_file[0], args.load_folder_file[1])
+        log.info('Loading checkpoint "%s/%s"...', args.save_dir, args.saved_model_filename)
+        nnet.load_checkpoint(Path(args.save_dir) / args.saved_model_filename)
     else:
         log.warning('Not loading a checkpoint!')
 
