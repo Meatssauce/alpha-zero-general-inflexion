@@ -18,7 +18,7 @@ args = dotdict({
     'lr': 0.001,
     'dropout': 0.3,
     'epochs': 10,
-    'batch_size': 512,
+    'batch_size': 128,
     'cuda': torch.cuda.is_available(),
     'num_channels': 512,
 })
@@ -37,7 +37,7 @@ class NNetWrapper(NeuralNet):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
-        optimizer = optim.Adam(self.nnet.parameters())
+        optimizer = optim.Adam(self.nnet.parameters(), lr=1e-3, weight_decay=1e-4)
 
         for epoch in range(args.epochs):
             print('EPOCH ::: ' + str(epoch + 1))

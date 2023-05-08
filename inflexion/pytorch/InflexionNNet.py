@@ -163,18 +163,3 @@ class InflexionNNet(nn.Module):
         pi = self.pi_tower(x)
         v = self.v_tower(x)
         return pi, v
-
-    def predict(self, board):
-        """
-        board: np array with board
-        """
-        if isinstance(board, np.ndarray):
-            board = torch.from_numpy(board)
-
-        with torch.no_grad():
-            log_pi, v = self.forward(
-                board.unsqueeze(0)
-                .float()
-                .to(self.residual_tower[0].weight.device)
-            )
-            return log_pi.detach().squeeze().exp().cpu(), v.detach().item()

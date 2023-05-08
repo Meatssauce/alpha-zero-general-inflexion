@@ -85,7 +85,7 @@ class Coach:
 
             if result == GameOutcome.ONGOING:
                 continue
-
+            
             return [(board, policy.ravel().tolist(), result.value if player == game.player else -result.value)
                     for board, policy, player in zip(boardStacks, policyPlanes, players)]
 
@@ -106,10 +106,10 @@ class Coach:
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
 
-                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                    mcts = MCTS(self.nnet, self.args)  # reset search tree
-                    game = self.game.restarted()  # reset game
-                    iterationTrainExamples += self.executeEpisode((game, mcts))
+                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
+                #     mcts = MCTS(self.nnet, self.args)  # reset search tree
+                #     game = self.game.restarted()  # reset game
+                #     iterationTrainExamples += self.executeEpisode((game, mcts))
 
                 # os.makedirs(self.args.sharedPath, exist_ok=True)
                 # with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
@@ -123,12 +123,12 @@ class Coach:
                 # with open(os.path.join(self.args.sharedPath, 'iterationTrainExamples'), "rb") as f:
                 #     iterationTrainExamples += Unpickler(f).load()
                 
-                # with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
-                #     items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
-                #     for results in p.imap_unordered(self.executeEpisode, items):
-                #         iterationTrainExamples += results
-                #         pbar.update()
-                #     sleep(3)
+                with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
+                    items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
+                    for results in p.imap_unordered(self.executeEpisode, items):
+                        iterationTrainExamples += results
+                        pbar.update()
+                torch.cuda.empty_cache()
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -149,20 +149,29 @@ class Coach:
             shuffle(trainExamples)
 
             # training new network
-            self.nnet.train(trainExamples)
             self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+            self.pnnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+            pmp = MCTSPlayer(MCTS(self.pnet, self.args))  # change input args
+            
+            self.nnet.train(trainExamples)
+            self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=f"iter{i:05d}.pt")
 
             if i % pitInterval != 0:
                 continue
 
             log.info('PITTING AGAINST BASELINES')
-            nmcts = MCTS(self.nnet, self.args)
-            player1 = MCTSPlayer(nmcts)
+            nmp = MCTSPlayer(MCTS(self.nnet, self.args))
 
-            for player2 in [RandomPlayer(), GreedyPlayer()]:
-                arena = Arena(player1, player2, self.game.restarted())
-                p1wins, p2wins, draws = arena.playGames(self.args.arenaCompare)
-                log.info(f'NEW/{player2.__class__.__name__} WINS : %d / %d ; DRAWS : %d' % (p1wins, p2wins, draws))
+            arena = Arena(pmp, nmp, self.game.restarted())
+            pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
+            log.info(f'NEW/PREV WINS : %d / %d ; DRAWS : %d' % (pwins, pwins, draws))
+            
+            if pwins + nwins == 0 or nwins / (pwins + nwins) < self.updateThreshold:
+                print("rejected new model")
+                self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+            else:
+                print("accepting new model")
+                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
 
     def getCheckpointFile(self, iteration):
         return 'checkpoint_' + str(iteration) + '.pth.tar'
