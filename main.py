@@ -22,7 +22,7 @@ args = dotdict({
     'cpuct': 1,
 
     'checkpoint': './temp/',
-    'load_model': True,
+    'load_model': False,
     'load_folder_file': ('./dev/models/inflexion/7x343x6', 'best5.pth.tar'),
     'numItersForTrainExamplesHistory': 20,
     'sharedPath': './shared'

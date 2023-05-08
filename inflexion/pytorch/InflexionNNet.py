@@ -1,54 +1,180 @@
 import sys
-sys.path.append('..')
-from utils import *
 
-import argparse
+import numpy as np
+from torch.utils.data import Dataset
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
+
+sys.path.append('..')
+
+
+class SelfPlayDataset(Dataset):
+    def __init__(self, examples):
+        self.examples = examples
+
+    def __getitem__(self, i):
+        example = self.examples[i]
+        return (
+            torch.tensor(example[0]).float(),
+            torch.tensor(example[1]),
+            torch.tensor(example[2]).float(),
+        )
+
+    def __len__(self):
+        return len(self.examples)
+
+
+class SumModule(nn.Module):
+    def __init__(self, *modules):
+        super().__init__()
+        self.branches = nn.ModuleList(modules)
+
+    def forward(self, x):
+        return sum(module(x) for module in self.branches)
+
 
 class InflexionNNet(nn.Module):
-    def __init__(self, game, args):
+    def __init__(self, game):
         # game params
         self.depth, self.board_x, self.board_y = game.to_planes().shape
-        self.action_size = game.max_actions
-        self.args = args
+        self.pi_shape = game.policy_shape
+        self.max_actions = game.max_actions
+        assert self.max_actions <= 343
 
         super(InflexionNNet, self).__init__()
-        self.conv1 = nn.Conv2d(self.depth, args.num_channels, 3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(args.num_channels, args.num_channels, 3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(args.num_channels, args.num_channels, 3, stride=1)
-        self.conv4 = nn.Conv2d(args.num_channels, args.num_channels, 3, stride=1)
+        self.residual_tower = nn.Sequential(
+            nn.Conv2d(self.depth, 16, 3, 1, 1),
+            SumModule(
+                nn.Sequential(
+                    nn.Conv2d(16, 32, 3, 1, 1),
+                    nn.BatchNorm2d(32),
+                    nn.Mish(),
+                    nn.Conv2d(32, 32, 3, 1, 1),
+                    nn.BatchNorm2d(32),
+                ),
+                nn.Conv2d(16, 32, 1, 1, 0),
+            ),
+            nn.Mish(),
+            SumModule(
+                nn.Sequential(
+                    nn.Conv2d(32, 64, 3, 1, 1),
+                    nn.BatchNorm2d(64),
+                    nn.Mish(),
+                    nn.Conv2d(64, 64, 3, 1, 1),
+                    nn.BatchNorm2d(64),
+                ),
+                nn.Conv2d(32, 64, 1, 1, 0),
+            ),
+            nn.Mish(),
+            SumModule(
+                nn.Sequential(
+                    nn.Conv2d(64, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                    nn.Mish(),
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                ),
+                nn.Conv2d(64, 128, 1, 1, 0),
+            ),
+            nn.Mish(),
+            SumModule(
+                nn.Sequential(
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                    nn.Mish(),
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                ),
+                nn.Sequential(),
+            ),
+            nn.Mish(),
+            SumModule(
+                nn.Sequential(
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                    nn.Mish(),
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                ),
+                nn.Sequential(),
+            ),
+            nn.Mish(),
+            SumModule(
+                nn.Sequential(
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                    nn.Mish(),
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                ),
+                nn.Sequential(),
+            ),
+            nn.Mish(),
+            SumModule(
+                nn.Sequential(
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                    nn.Mish(),
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                ),
+                nn.Sequential(),
+            ),
+            nn.Mish(),
+            SumModule(
+                nn.Sequential(
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                    nn.Mish(),
+                    nn.Conv2d(128, 128, 3, 1, 1),
+                    nn.BatchNorm2d(128),
+                ),
+                nn.Sequential(),
+            ),
+            nn.Mish(),
+        )
 
-        self.bn1 = nn.BatchNorm2d(args.num_channels)
-        self.bn2 = nn.BatchNorm2d(args.num_channels)
-        self.bn3 = nn.BatchNorm2d(args.num_channels)
-        self.bn4 = nn.BatchNorm2d(args.num_channels)
+        self.pi_tower = nn.Sequential(
+            nn.Conv2d(128, 32, 1, 1, 0),
+            nn.BatchNorm2d(32),
+            nn.Mish(),
+            nn.Flatten(),
+            nn.Linear(32 * 7 * 7, 512),
+            nn.Mish(),
+            nn.Linear(512, self.max_actions),
+            nn.LogSoftmax(dim=1),
+        )
 
-        self.fc1 = nn.Linear(args.num_channels*(self.board_x-4)*(self.board_y-4), 1024)
-        self.fc_bn1 = nn.BatchNorm1d(1024)
+        self.v_tower = nn.Sequential(
+            nn.Conv2d(128, 16, 1, 1, 0),
+            nn.BatchNorm2d(16),
+            nn.Mish(),
+            nn.Flatten(),
+            nn.Linear(16 * 7 * 7, 256),
+            nn.Mish(),
+            nn.Linear(256, 1),
+            nn.Tanh(),
+        )
 
-        self.fc2 = nn.Linear(1024, 512)
-        self.fc_bn2 = nn.BatchNorm1d(512)
-
-        self.fc3 = nn.Linear(512, self.action_size)
-
-        self.fc4 = nn.Linear(512, 1)
+        self.eval()
 
     def forward(self, s):
-        #                                                           s: batch_size x board_x x board_y
-        s = s.view(-1, self.depth, self.board_x, self.board_y)  # batch_size x depth x board_x x board_y
-        s = F.relu(self.bn1(self.conv1(s)))                          # batch_size x num_channels x board_x x board_y
-        s = F.relu(self.bn2(self.conv2(s)))                          # batch_size x num_channels x board_x x board_y
-        s = F.relu(self.bn3(self.conv3(s)))                          # batch_size x num_channels x (board_x-2) x (board_y-2)
-        s = F.relu(self.bn4(self.conv4(s)))                          # batch_size x num_channels x (board_x-4) x (board_y-4)
-        s = s.view(-1, self.args.num_channels*(self.board_x-4)*(self.board_y-4))
+        x = self.residual_tower(s)
+        pi = self.pi_tower(x)
+        v = self.v_tower(x)
+        return pi, v
 
-        s = F.dropout(F.relu(self.fc_bn1(self.fc1(s))), p=self.args.dropout, training=self.training)  # batch_size x 1024
-        s = F.dropout(F.relu(self.fc_bn2(self.fc2(s))), p=self.args.dropout, training=self.training)  # batch_size x 512
+    def predict(self, board):
+        """
+        board: np array with board
+        """
+        if isinstance(board, np.ndarray):
+            board = torch.from_numpy(board)
 
-        pi = self.fc3(s)                                                                         # batch_size x action_size
-        v = self.fc4(s)                                                                          # batch_size x 1
-
-        return F.log_softmax(pi, dim=1), torch.tanh(v)
+        with torch.no_grad():
+            log_pi, v = self.forward(
+                board.unsqueeze(0)
+                .float()
+                .to(self.residual_tower[0].weight.device)
+            )
+            return log_pi.detach().squeeze().exp().cpu(), v.detach().item()
