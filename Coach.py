@@ -150,7 +150,7 @@ class Coach:
 
             # training new network
             self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            self.pnnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+            self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             pmp = MCTSPlayer(MCTS(self.pnet, self.args))  # change input args
             
             self.nnet.train(trainExamples)
