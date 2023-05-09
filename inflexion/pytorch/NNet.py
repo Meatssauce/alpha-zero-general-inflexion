@@ -14,15 +14,6 @@ import torch.optim as optim
 
 from .InflexionNNet import InflexionNNet as innet
 
-args = dotdict({
-    'lr': 0.001,
-    'dropout': 0.3,
-    'epochs': 10,
-    'batch_size': 128,
-    'cuda': torch.cuda.is_available(),
-    'num_channels': 512,
-})
-
 
 class NNetWrapper(NeuralNet):
     def __init__(self, game):
@@ -30,33 +21,33 @@ class NNetWrapper(NeuralNet):
         self.depth, self.board_x, self.board_y = game.to_planes().shape
         self.action_size = game.max_actions
 
-        if args.cuda:
+        if torch.cuda.is_available():
             self.nnet.cuda()
 
-    def train(self, examples):
+    def train(self, examples, epochs=10, batch_size=128):
         """
         examples: list of examples, each example is of form (board, pi, v)
         """
         optimizer = optim.Adam(self.nnet.parameters(), lr=1e-3, weight_decay=1e-4)
 
-        for epoch in range(args.epochs):
+        for epoch in range(epochs):
             print('EPOCH ::: ' + str(epoch + 1))
             self.nnet.train()
             pi_losses = AverageMeter()
             v_losses = AverageMeter()
 
-            batch_count = int(len(examples) / args.batch_size)
+            batch_count = int(len(examples) / batch_size)
 
             t = tqdm(range(batch_count), desc='Training Net')
             for _ in t:
-                sample_ids = np.random.randint(len(examples), size=args.batch_size)
+                sample_ids = np.random.randint(len(examples), size=batch_size)
                 boards, pis, vs = list(zip(*[examples[i] for i in sample_ids]))
                 boards = torch.FloatTensor(np.array(boards).astype(np.float64))
                 target_pis = torch.FloatTensor(np.array(pis))
                 target_vs = torch.FloatTensor(np.array(vs).astype(np.float64))
 
                 # predict
-                if args.cuda:
+                if torch.cuda.is_available():
                     boards, target_pis, target_vs = boards.contiguous().cuda(), target_pis.contiguous().cuda(), target_vs.contiguous().cuda()
 
                 # compute output
@@ -84,7 +75,7 @@ class NNetWrapper(NeuralNet):
 
         # preparing input
         board = board.unsqueeze(0).float()
-        if args.cuda:
+        if torch.cuda.is_available():
             board = board.contiguous().cuda()
         self.nnet.eval()
         with torch.no_grad():

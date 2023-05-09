@@ -29,8 +29,7 @@ def getPlayer(kind: str, game: Game, folder: str = None, filename: str = None):
         case "mcts":
             nn = NNet(game)
             nn.load_checkpoint(folder=folder, filename=filename)
-            args = dotdict({'numMCTSSims': 50, 'cpuct': 1.0})
-            mcts = MCTS(nn, args)
+            mcts = MCTS(nn, numMCTSSims=25, cpuct=1)
             player = MCTSPlayer(mcts)
         case _:
             raise ValueError(f"Unknown CPU player: {kind}")

@@ -25,17 +25,38 @@ torch.multiprocessing.set_start_method('spawn', force=True)
 class Coach:
     """
     This class executes the self-play + learning. It uses the functions defined
-    in Game and NeuralNet. args are specified in main.py.
+    in Game and NeuralNet.
     """
 
-    def __init__(self, game: Game, nnet: NNetWrapper, args):
+    def __init__(self, game: Game, 
+                 nnet: NNetWrapper, 
+                 tempThreshold=30, 
+                 numIters=1000, 
+                 maxlenOfQueue=200000,  # Number of game examples to train the neural networks.
+                 numEps=30,  # Number of complete self-play games to simulate during a new iteration.
+                 numItersForTrainExamplesHistory=20,
+                 numMCTSSims=250,
+                 cpuct=3,
+                 checkpoint='./temp/', 
+                 updateThreshold=0.55,  # During arena playoff, new neural net will be accepted if threshold or more of games are won.
+                 load_folder_file=('./dev/models/inflexion/7x343x6', 'best5.pth.tar')
+                ):
         assert isinstance(game, Game)
         assert isinstance(nnet, NNetWrapper)
         self.game = game
         self.nnet = nnet
         self.pnet = self.nnet.__class__(self.game)  # the competitor network
-        self.args = args
-        self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
+        self.tempThreshold = tempThreshold
+        self.numIters = numIters
+        self.maxlenOfQueue = maxlenOfQueue
+        self.numEps = numEps
+        self.numItersForTrainExamplesHistory = numItersForTrainExamplesHistory
+        self.numMCTSSims = numMCTSSims
+        self.cpuct = cpuct
+        self.checkpoint = checkpoint
+        self.updateThreshold = updateThreshold
+        self.load_folder_file = load_folder_file
+        self.trainExamplesHistory = []  # history of examples from numItersForTrainExamplesHistory latest iterations
         self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
     def executeEpisode(self, args):
@@ -65,7 +86,7 @@ class Coach:
 
         while True:
             episodeStep += 1
-            temp = int(episodeStep < self.args.tempThreshold)
+            temp = int(episodeStep < self.tempThreshold)
 
             # Get action probabilities from the perspective of current player
             pi = mcts.getActionProb(game, temp=temp)
@@ -99,32 +120,20 @@ class Coach:
         """
 
         pitInterval = 5
-        for i in range(1, self.args.numIters + 1):
+        for i in range(1, self.numIters + 1):
             # bookkeeping
             log.info(f'Starting Iter #{i} ...')
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
-                iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
+                iterationTrainExamples = deque([], maxlen=self.maxlenOfQueue)
 
-                # for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                #     mcts = MCTS(self.nnet, self.args)  # reset search tree
+                # for _ in tqdm(range(self.numEps), desc="Self Play"):
+                #     mcts = MCTS(self.nnet, self.numMCTSSims, self.cpuct)  # reset search tree
                 #     game = self.game.restarted()  # reset game
                 #     iterationTrainExamples += self.executeEpisode((game, mcts))
-
-                # os.makedirs(self.args.sharedPath, exist_ok=True)
-                # with open(os.path.join(self.args.sharedPath, 'game'), "wb") as f, \
-                #         open(os.path.join(self.args.sharedPath, 'args'), 'wb') as g:
-                #     Pickler(f).dump(self.game)
-                #     Pickler(g).dump(self.args)
-                # self.nnet.save_checkpoint(self.args.sharedPath, 'nnet.pth.bar')
-                # os.system("python selfplay.py")
-                # while not os.path.exists(os.path.join(self.args.sharedPath, 'iterationTrainExamples')):
-                #     sleep(1)
-                # with open(os.path.join(self.args.sharedPath, 'iterationTrainExamples'), "rb") as f:
-                #     iterationTrainExamples += Unpickler(f).load()
                 
-                with Pool() as p, tqdm(total=self.args.numEps, desc="Self Play") as pbar:
-                    items = ((self.game, MCTS(self.nnet, self.args)) for _ in range(self.args.numEps))
+                with Pool() as p, tqdm(total=self.numEps, desc="Self Play") as pbar:
+                    items = ((self.game, MCTS(self.nnet, self.numMCTSSims, self.cpuct)) for _ in range(self.numEps))
                     for results in p.imap_unordered(self.executeEpisode, items):
                         iterationTrainExamples += results
                         pbar.update()
@@ -133,7 +142,7 @@ class Coach:
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
 
-            if len(self.trainExamplesHistory) > self.args.numItersForTrainExamplesHistory:
+            if len(self.trainExamplesHistory) > self.numItersForTrainExamplesHistory:
                 log.warning(
                     f"Removing the oldest entry in trainExamples. len(trainExamplesHistory) = "
                     f"{len(self.trainExamplesHistory)}")
@@ -149,35 +158,32 @@ class Coach:
             shuffle(trainExamples)
 
             # training new network
-            self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            pmp = MCTSPlayer(MCTS(self.pnet, self.args))  # change input args
+            self.nnet.save_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
+            self.pnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
+            pmp = MCTSPlayer(MCTS(self.pnet, self.numMCTSSims, self.cpuct))
             
-            self.nnet.train(trainExamples)
-            self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=f"iter{i:05d}.pt")
-
-            if i % pitInterval != 0:
-                continue
+            self.nnet.train(trainExamples, epochs=20, batch_size=256)
+            self.nnet.save_checkpoint(folder=self.checkpoint, filename=f"iter{i:05d}.pt")
 
             log.info('PITTING AGAINST BASELINES')
-            nmp = MCTSPlayer(MCTS(self.nnet, self.args))
+            nmp = MCTSPlayer(MCTS(self.nnet, self.numMCTSSims, self.cpuct))
 
             arena = Arena(pmp, nmp, self.game.restarted())
-            pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
+            pwins, nwins, draws = arena.playGames(arenaCompare=40)  # Number of games to play during arena play to determine if new net will be accepted.
             log.info(f'NEW/PREV WINS : %d / %d ; DRAWS : %d' % (pwins, pwins, draws))
             
-            if pwins + nwins == 0 or nwins / (pwins + nwins) < self.args.updateThreshold:
+            if pwins + nwins == 0 or nwins / (pwins + nwins) < self.updateThreshold:
                 print("rejected new model")
-                self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+                self.nnet.load_checkpoint(folder=self.checkpoint, filename='temp.pth.tar')
             else:
                 print("accepting new model")
-                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
+                self.nnet.save_checkpoint(folder=self.checkpoint, filename='best.pth.tar')
 
     def getCheckpointFile(self, iteration):
         return 'checkpoint_' + str(iteration) + '.pth.tar'
 
     def saveTrainExamples(self, iteration):
-        folder = self.args.checkpoint
+        folder = self.checkpoint
         if not os.path.exists(folder):
             os.makedirs(folder)
         filename = os.path.join(folder, self.getCheckpointFile(iteration) + ".examples")
@@ -185,7 +191,7 @@ class Coach:
             Pickler(f).dump(self.trainExamplesHistory)
 
     def loadTrainExamples(self):
-        modelFile = os.path.join(self.args.load_folder_file[0], self.args.load_folder_file[1])
+        modelFile = os.path.join(self.load_folder_file[0], self.load_folder_file[1])
         examplesFile = modelFile + ".examples"
         if not os.path.isfile(examplesFile):
             log.warning(f'File "{examplesFile}" with trainExamples not found!')
