@@ -120,27 +120,33 @@ class Coach:
         """
 
         pitInterval = 5
+        quick_reload_path = 'temp/checkpoint_0.pth.tar.examples'
         for i in range(1, self.numIters + 1):
             # bookkeeping
             log.info(f'Starting Iter #{i} ...')
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
                 iterationTrainExamples = deque([], maxlen=self.maxlenOfQueue)
-
-                # for _ in tqdm(range(self.numEps), desc="Self Play"):
-                #     mcts = MCTS(self.nnet, self.numMCTSSims, self.cpuct)  # reset search tree
-                #     game = self.game.restarted()  # reset game
-                #     iterationTrainExamples += self.executeEpisode((game, mcts))
                 
-                with Pool() as p, tqdm(total=self.numEps, desc="Self Play") as pbar:
-                    items = ((self.game, MCTS(self.nnet, self.numMCTSSims, self.cpuct)) for _ in range(self.numEps))
-                    for results in p.imap_unordered(self.executeEpisode, items):
-                        iterationTrainExamples += results
-                        pbar.update()
-                torch.cuda.empty_cache()
+                if quick_reload_path is not None:
+                    with open(quick_reload_path, "rb") as f:
+                        self.trainExamplesHistory = Unpickler(f).load()
+                    quick_reload_path = None
+                else:
+                    # for _ in tqdm(range(self.numEps), desc="Self Play"):
+                    #     mcts = MCTS(self.nnet, self.numMCTSSims, self.cpuct)  # reset search tree
+                    #     game = self.game.restarted()  # reset game
+                    #     iterationTrainExamples += self.executeEpisode((game, mcts))
 
-                # save the iteration examples to the history 
-                self.trainExamplesHistory.append(iterationTrainExamples)
+                    with Pool() as p, tqdm(total=self.numEps, desc="Self Play") as pbar:
+                        items = ((self.game, MCTS(self.nnet, self.numMCTSSims, self.cpuct)) for _ in range(self.numEps))
+                        for results in p.imap_unordered(self.executeEpisode, items):
+                            iterationTrainExamples += results
+                            pbar.update()
+                    torch.cuda.empty_cache()
+
+                    # save the iteration examples to the history 
+                    self.trainExamplesHistory.append(iterationTrainExamples)
 
             if len(self.trainExamplesHistory) > self.numItersForTrainExamplesHistory:
                 log.warning(
@@ -169,7 +175,7 @@ class Coach:
             nmp = MCTSPlayer(MCTS(self.nnet, self.numMCTSSims, self.cpuct))
 
             arena = Arena(pmp, nmp, self.game.restarted())
-            pwins, nwins, draws = arena.playGames(arenaCompare=40)  # Number of games to play during arena play to determine if new net will be accepted.
+            pwins, nwins, draws = arena.playGames(40)  # Number of games to play during arena play to determine if new net will be accepted.
             log.info(f'NEW/PREV WINS : %d / %d ; DRAWS : %d' % (pwins, pwins, draws))
             
             if pwins + nwins == 0 or nwins / (pwins + nwins) < self.updateThreshold:

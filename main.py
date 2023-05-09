@@ -19,19 +19,19 @@ def main():
     log.info('Loading %s...', nn.__name__)
     nnet = nn(g)
     
-    checkpoint = ('./dev/models/inflexion/7x343x6', 'best5.pth.tar')
+    load_folder_file = ('./dev/models/inflexion/7x343x6', 'best5.pth.tar')
     load_model = False
     
     if load_model:
-        log.info('Loading checkpoint "%s/%s"...', *checkpoint)
-        nnet.load_checkpoint(*checkpoint)
+        log.info('Loading checkpoint "%s/%s"...', *load_folder_file)
+        nnet.load_checkpoint(*load_folder_file)
         log.info("Loading 'trainExamples' from file...")
         c.loadTrainExamples()
     else:
         log.warning('Not loading a checkpoint!')
 
     log.info('Loading the Coach...')
-    c = Coach(g, nnet, checkpoint=checkpoint)
+    c = Coach(g, nnet, load_folder_file=load_folder_file)
 
     log.info('Starting the learning process 🎉')
     c.learn()
