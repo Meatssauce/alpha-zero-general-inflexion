@@ -21,6 +21,9 @@ def main():
     
     load_folder_file = ('./dev/models/inflexion/7x343x6', 'best5.pth.tar')
     load_model = False
+
+    log.info('Loading the Coach...')
+    c = Coach(g, nnet, load_folder_file=load_folder_file)
     
     if load_model:
         log.info('Loading checkpoint "%s/%s"...', *load_folder_file)
@@ -29,9 +32,6 @@ def main():
         c.loadTrainExamples()
     else:
         log.warning('Not loading a checkpoint!')
-
-    log.info('Loading the Coach...')
-    c = Coach(g, nnet, load_folder_file=load_folder_file)
 
     log.info('Starting the learning process 🎉')
     c.learn()
