@@ -166,7 +166,7 @@ class Coach:
             pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
             log.info(f'NEW/PREV WINS : %d / %d ; DRAWS : %d' % (pwins, pwins, draws))
             
-            if pwins + nwins == 0 or nwins / (pwins + nwins) < self.updateThreshold:
+            if pwins + nwins == 0 or nwins / (pwins + nwins) < self.args.updateThreshold:
                 print("rejected new model")
                 self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             else:
